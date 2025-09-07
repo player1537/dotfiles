@@ -1,0 +1,41 @@
+set autoindent
+syntax off
+set wildmode=longest,list
+set wildmenu
+
+set exrc
+
+set secure
+
+syntax off
+
+" Redrawing the screen clears the search as well
+nnoremap <C-l> :let @/ = ""<CR><C-l>
+
+" nnoremap <C-n> :bnext<CR>
+" nnoremap <C-p> :bprev<CR>
+
+silent blast
+silent bfirst
+
+" fix backspace in insert mode
+set backspace=indent,eol,start
+
+au BufReadPost *.py,*.tex,*.bash,*.sh set sta et sw=4 ts=4 sts=4 ai
+
+set tabstop=4
+set softtabstop=4
+set shiftwidth=4
+set expandtab
+
+" Thanks https://stackoverflow.com/a/14449484
+" Return to last edit position when opening files (You want this!)
+autocmd BufReadPost *
+     \ if line("'\"") > 0 && line("'\"") <= line("$") |
+     \   exe "normal! g`\"" |
+     \ endif
+
+nnoremap <Leader>2 :set tabstop=2 softtabstop=2 shiftwidth=2 expandtab<CR>
+nnoremap <Leader>4 :set tabstop=4 softtabstop=4 shiftwidth=4 expandtab<CR>
+nnoremap <Leader><TAB> :set tabstop=4 softtabstop=4 shiftwidth=4 noexpandtab<CR>
+

@@ -1,0 +1,22 @@
+[user]
+	email = thobson125@gmail.com
+	name = Tanner Hobson
+
+[init]
+	defaultBranch = main
+
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+
+[credential "https://huggingface.co"]
+	username = player1537
+
+[credential]
+	helper = store
