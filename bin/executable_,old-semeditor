@@ -1,0 +1,920 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+# Script Dependencies:
+#   fastcdc
+#   numpy
+#   torch
+#   scikit-learn
+#   transformers
+#   xdg-base-dirs
+#   more-itertools
+#   llm
+#   matplotlib
+
+class auto:
+    import base64
+    import collections
+    import functools
+    import io
+    import itertools
+    import json
+    import pathlib
+    import re
+    import textwrap
+    import tkinter as tk, tkinter.ttk as ttk, tkinter.scrolledtext
+    import typing
+
+    import fastcdc, fastcdc.fastcdc_py
+    import llm
+    import more_itertools
+    import numpy, numpy as np
+    import sklearn, sklearn.svm, sklearn.decomposition, sklearn.neighbors
+    import torch
+    import tqdm, tqdm.tk
+    import transformers
+    import matplotlib as mpl, matplotlib.pyplot as plt, matplotlib.backends.backend_tkagg
+    import mediocreatbest
+    import xdg_base_dirs
+
+
+Tokenizer = auto.transformers.AutoTokenizer.from_pretrained
+Model = auto.transformers.AutoModel.from_pretrained
+Chunk = auto.collections.namedtuple('Chunk', 'offset length text')
+
+
+CONFIG_ROOT = auto.xdg_base_dirs.xdg_config_home() / 'semeditor'
+CONFIG_PATHS = {
+    'positive': CONFIG_ROOT / 'positive.txt',
+    'negative': CONFIG_ROOT / 'negative.txt',
+    'primary': CONFIG_ROOT / 'primary.txt',
+    'cache': CONFIG_ROOT / 'cache.json',
+}
+
+# "SE" Icon
+ICON = auto.base64.b64decode(r"""
+    UDUKNjQgNjQKMjU1Cv//////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    /////8dvOBUGBxUzWY3F+////////wMAAAAAAAAAAAAAAAAAAAAAADP/////////////////////
+    ////////////6kwAAAc2T1E+EgAAAA6F//////9WU1IAAAAQExMTExMTExMTEQAz////////////
+    ////////////////////8icAAn/x//////yzIQAAV//////////7AAAA1////////////98AM///
+    /////////////////////////////3cAAID//////////+QSAFf/////////+wAAANf/////////
+    ///fADP///////////////////////////////8dAADm////////////gQBX//////////sAAADX
+    ////////////61t9///////////////////////////////5AAAA+f///////////8cAV///////
+    ///7AAAA1///////////////////////////////////////////////+QAAANH////////////+
+    7/X/////////+wAAANf////////LAEf///////////////////////////////////8eAABN/v//
+    //////////////////////sAAADX////////ywBH////////////////////////////////////
+    cQAAAEHE///////////////////////7AAAA1////////8sAR///////////////////////////
+    /////////+seAAAAACh7yP3/////////////////+wAAABQXFxcXFxcTAEf/////////////////
+    ////////////////////4jwAAAAAAAAUW6r0//////////////sAAAAAAAAAAAAAAABH////////
+    ///////////////////////////////+sEICAAAAAAAADnLu///////////7AAAA1////////8sA
+    R///////////////////////////////////////////6J1VEQAAAAAAF8n/////////+wAAANf/
+    ///////LAEf///////////////////////////////////////////////zCbBAAAAAV6v//////
+    //sAAADX////////2kd7///////////////////////////////////////////////////xawAA
+    AIL////////7AAAA1///////////////////////////////////////////////////////////
+    //////9CAABE////////+wAAANf///////////////////////////////////////////////+P
+    b/n/////////////lAAAMf////////sAAADX////////////////////////////////////////
+    ////////NwDb/////////////6sAAEL////////7AAAA1/////////////+dj/r/////////////
+    /////////////////zcAk/////////////+AAABz////////+wAAANf/////////////HwDz////
+    //////////////////////////83ABvo///////////oFwAC0P////////sAAADX////////////
+    /x8A8///////////////////////////////NwAAI7D7//////uvIgAAev/////////7AAAA1///
+    //////////8fAPP//////////////////////////////5AkAAAADTlNTToOAAAMjf///////1pX
+    VgAAABATExMTExMTExMTAgDz/////////////////////////////////9OTWzQWCAQQJ1OX7P//
+    //////8DAAAAAAAAAAAAAAAAAAAAAAAA8///////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    //////8=
+""")
+
+
+_g_embedding_tokenizer: Tokenizer = None
+_g_embedding_model: Model = None
+_g_tk: auto.tkinter.Tk = None
+_g_cache: dict[str, list[float]] = None
+
+
+RdBu5 = ['#ca0020', '#f4a582', '#f7f7f7', '#92c5de', '#0571b0' ]
+RdBu7 = (
+"""#b2182b
+#ef8a62
+#fddbc7
+#f7f7f7
+#d1e5f0
+#67a9cf
+#2166ac"""
+).split('\n')
+RdBu11 = (
+"""#67001f
+#b2182b
+#d6604d
+#f4a582
+#fddbc7
+#f7f7f7
+#d1e5f0
+#92c5de
+#4393c3
+#2166ac
+#053061"""
+).split('\n')
+
+
+def Interpolate(a: str, b: str, r: float) -> str:
+    def Decode(hex: str, /) -> tuple[float, float, float]:
+        assert hex.startswith('#')
+        hex = hex.removeprefix('#')
+        r = int(hex[0:2], 16) / 255.0
+        g = int(hex[2:4], 16) / 255.0
+        b = int(hex[4:6], 16) / 255.0
+        return (r, g, b)
+
+    def Encode(rgb: tuple[float, float, float], /) -> str:
+        r = int(rgb[0] * 255.0)
+        g = int(rgb[1] * 255.0)
+        b = int(rgb[2] * 255.0)
+        return f'#{r:02x}{g:02x}{b:02x}'
+
+    def Interpolate(a: float, b: float, r: float) -> float:
+        return a * r + b * (1.0 - r)
+
+    a = Decode(a)
+    b = Decode(b)
+    c = (
+        Interpolate(a[0], b[0], r),
+        Interpolate(a[1], b[1], r),
+        Interpolate(a[2], b[2], r),
+    )
+    return Encode(c)
+
+
+COLORMAP = {
+    'z': RdBu11[5],
+    'p1': RdBu11[5-1],
+    'p2': RdBu11[5-2],
+    'p3': RdBu11[5-3],
+    'p4': RdBu11[5-4],
+    'n1': RdBu11[5+1],
+    'n2': RdBu11[5+2],
+    'n3': RdBu11[5+3],
+    'n4': RdBu11[5+4],
+}
+
+COLORMAP |= {
+    'p0': COLORMAP['z'],
+    'n0': COLORMAP['z'],
+}
+
+COLORMAP |= {
+    'p1a': Interpolate(COLORMAP['p1'], COLORMAP['p0'], 0.85),
+    'p1b': Interpolate(COLORMAP['p1'], COLORMAP['p2'], 0.85),
+    'p2a': Interpolate(COLORMAP['p2'], COLORMAP['p1'], 0.85),
+    'p2b': Interpolate(COLORMAP['p2'], COLORMAP['p3'], 0.85),
+    'p3a': Interpolate(COLORMAP['p3'], COLORMAP['p2'], 0.85),
+    'p3b': Interpolate(COLORMAP['p3'], COLORMAP['p4'], 0.85),
+    'n1a': Interpolate(COLORMAP['n1'], COLORMAP['n0'], 0.85),
+    'n1b': Interpolate(COLORMAP['n1'], COLORMAP['n2'], 0.85),
+    'n2a': Interpolate(COLORMAP['n2'], COLORMAP['n1'], 0.85),
+    'n2b': Interpolate(COLORMAP['n2'], COLORMAP['n3'], 0.85),
+    'n3a': Interpolate(COLORMAP['n3'], COLORMAP['n2'], 0.85),
+    'n3b': Interpolate(COLORMAP['n3'], COLORMAP['n4'], 0.85),
+}
+
+
+def Chunks(text: str) -> list[Chunk]:
+    text: bytes = text.encode('ascii', errors='ignore')
+
+    chunks = []
+    for chunk in auto.fastcdc.fastcdc_py.chunk_generator(
+        stream=auto.io.BytesIO(text),
+        min_size=32,
+        avg_size=64,
+        max_size=128,
+        fat=False,
+        hf=None,
+    ):
+        chunks.append(Chunk(
+            offset=chunk.offset,
+            length=chunk.length,
+            text=text[chunk.offset:chunk.offset + chunk.length].decode('ascii', errors='ignore'),
+        ))
+
+    return chunks
+
+
+def Embed(text: str, /, *, seed: int=1337) -> auto.np.ndarray:
+    text = f'Represent this sentence for searching relevant passages: {text}'
+    if text in _g_cache:
+        return auto.np.array(_g_cache[text])
+
+    with auto.torch.random.fork_rng():
+        auto.torch.random.manual_seed(seed)
+
+        inp = _g_embedding_tokenizer(text, return_tensors='pt')
+        out = _g_embedding_model(**inp)
+
+    out = out.pooler_output
+    out = out.detach().numpy()
+    if isinstance(text, str):
+        out = out[0, :]
+
+    _g_cache[text] = out.tolist()
+
+    return out
+
+
+def Embeds(chunks: list[Chunk], /, *, k: int=3, progress: auto.tkinter.ttk.Progressbar=None) -> auto.np.ndarray:
+    embeds = []
+
+    windows = list(auto.more_itertools.windowed(auto.itertools.chain(
+        [None] * (k-1-1),
+        chunks,
+        [None] * (k-1-1),
+    ), k))
+    assert len(windows) == len(chunks), \
+        f"""Expected {len(chunks)} chunks, got {len(windows)} windows."""
+
+    if progress is not None:
+        progress.config(maximum=len(windows), value=0)
+
+    for window in windows:
+        texts = []
+        for chunk in window:
+            if chunk is None:
+                texts.append('')
+            else:
+                texts.append(chunk.text)
+
+        text = ''.join(texts)
+        embeds.append(Embed(text))
+
+        if progress is not None:
+            progress.step(1)
+            progress.update()
+
+    embeds = auto.np.array(embeds)
+    return embeds
+
+
+def Classifier(*, positive: str, negative: str, seed: int=1337) -> 'Classifier':
+    comparing = 2
+    if auto.re.match(r'^\s*$', negative):
+        comparing = 1
+
+    positive = Chunks(positive)
+    negative = Chunks(negative)
+
+    positive = Embeds(positive)
+    if comparing == 1:
+        negative = -positive
+    else:
+        negative = Embeds(negative)
+
+    X = auto.np.vstack([positive, negative])
+    y = auto.np.zeros((len(X),), dtype='u4')
+    y[:len(positive)] = 1
+
+    model = auto.sklearn.neighbors.KNeighborsClassifier(
+        weights='uniform',
+        metric='cosine',
+    )
+    model.fit(X, y)
+
+    return model
+
+
+def Classify(classifier, /, *, embeds: auto.np.ndarray, debug: bool=False) -> auto.np.ndarray:
+    probs = classifier.predict_proba(embeds)
+    if debug:
+        print(f'{probs=!r}')
+    probs = probs[:, 0] - probs[:, 1]
+    # probs = auto.sklearn.preprocessing.minmax_scale(probs, feature_range=(-1.0, 1.0))
+    return probs
+
+
+def Reduction(embeds: auto.np.ndarray, /, *, n: int=2, seed: int=1337) -> auto.sklearn.decomposition.PCA:
+    model = auto.sklearn.decomposition.PCA(
+        n_components=n,
+        random_state=seed,
+    )
+    model.fit(embeds)
+    return model
+
+
+def Reduce(model: auto.sklearn.decomposition.PCA, embeds: auto.np.ndarray, /) -> auto.np.ndarray:
+    return model.transform(embeds)
+
+
+def _configure_text_defaults(text: auto.tkinter.Text):
+    def callback(event):
+        text.tag_add(auto.tkinter.SEL, '1.0', auto.tkinter.END)
+        text.mark_set(auto.tkinter.INSERT, '1.0')
+        text.see(auto.tkinter.INSERT)
+        return 'break'  # prevent default
+    text.bind('<Control-KeyRelease-a>', callback)
+    def callback(event):
+        text.insert(auto.tkinter.INSERT, "  ")
+        return 'break'  # prevent default
+    text.bind('<Tab>', callback)
+
+
+class Editor(auto.tkinter.Frame):
+    def __init__(self, master: auto.tkinter.ttk.Widget, *, value=None):
+        super().__init__(master)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        self._history = auto.collections.deque(maxlen=64)
+
+        self._value = \
+        value = value or ''
+
+        def UpdateStringVar():
+            value = var.get()
+            self._value = value
+            self._history.append(value)
+
+        pause = False
+        def Hold():
+            nonlocal pause
+            pause = True
+
+        def Release():
+            nonlocal pause
+            pause = False
+
+        def IsHeld():
+            return pause
+
+        def Modified():
+            var.set(text.get('1.0', auto.tkinter.END))
+            text.edit_modified(0)
+
+        def Do(rotation_direction: auto.typing.Literal[-1, 1], /):
+            Hold()
+            initial = self._history[-1]
+            for _ in range(len(self._history)):
+                self._history.rotate(rotation_direction)
+                value = self._history[-1]
+                if value != initial:
+                    break
+            else:
+                print(f'All history entries are the same?')
+                return
+
+            self._text.delete('1.0', auto.tkinter.END)
+            self._text.update()
+            self._text.insert(auto.tkinter.END, value)
+            Release()
+            
+        def Undo():
+            Do(1)
+
+        def Redo():
+            Do(-1)
+
+        self._var = \
+        var = auto.tkinter.StringVar()
+        var.set(self.value)
+        def callback(name, index, mode):
+            UpdateStringVar()
+            return 'break'
+        var.trace('w', callback)
+
+        self._text = \
+        text = auto.tkinter.scrolledtext.ScrolledText(self, exportselection=False)
+        text.grid(row=0, column=0, sticky='nsew')
+        _configure_text_defaults(text)
+        text.insert(auto.tkinter.END, var.get())
+        def callback(event):
+            if not IsHeld():
+                Modified()
+            return 'break'  # prevent default
+        text.bind('<<Modified>>', callback)
+        def callback(event):
+            Undo()
+            return 'break'  # prevent default
+        text.bind('<Control-z>', callback)
+        def callback(event):
+            Redo()
+            return 'break'  # prevent default
+        text.bind('<Control-Z>', callback)
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._text.delete('1.0', auto.tkinter.END)
+        self._text.insert(auto.tkinter.END, value)
+        # self._var.set(value)
+
+    @property
+    def text(self):
+        return self._text
+
+
+def main(
+    *,
+    completion_model_name: str,
+    embedding_model_name: str,
+    embedding_tokenizer_name: str,
+    positive_text: str | None,
+    negative_text: str | None,
+    primary_text: str | None,
+):
+    try:
+        with open(CONFIG_PATHS['cache'], 'r') as f:
+            cache = auto.json.load(f)
+    except FileNotFoundError:
+        cache = {}
+    
+    embedding_tokenizer = Tokenizer(
+        embedding_tokenizer_name,
+    )
+
+    embedding_model = Model(
+        embedding_model_name,
+    )
+
+    global _g_cache
+    _g_cache = cache
+
+    global _g_embedding_tokenizer
+    _g_embedding_tokenizer = embedding_tokenizer
+
+    global _g_embedding_model
+    _g_embedding_model = embedding_model
+
+    tk = auto.tkinter.Tk()
+    tk.title('Semantic Editor')
+    tk.geometry('640x480')
+    tk.attributes('-zoomed', True)
+
+    global _g_tk
+    _g_tk = tk
+
+    icon = auto.tkinter.PhotoImage(data=ICON)
+    tk.tk.call('wm', 'iconphoto', tk._w, icon)
+
+    def Configure(text: auto.tkinter.Text, /, foreground: auto.typing.Literal[-1, 0, 1]=0):
+        def Opposite(tag: str, /, *, table=str.maketrans('pn', 'np')) -> str:
+            return tag.translate(table)
+
+        # text.config(bg=RdBu11[5+background])
+        if foreground != 0:
+            text.config(fg=RdBu11[5+5*foreground])
+        
+        for tag, color in COLORMAP.items():
+            text.tag_config(tag,
+                background=color,
+                selectforeground='#FFFFFF',
+                selectbackground='#000000',
+            )
+
+    def PreventDefault(func: auto.typing.Callable, *args, **kwargs) -> auto.typing.Literal['break']:
+        def callback(event):
+            func(*args, **kwargs)
+            return 'break'  # prevent default
+        return callback
+
+    def Expand(editor: Editor, /):
+        """Expand primary/negative buffers with duplicated text to get more data."""
+        def Expand(original_text: str, /, target: int=64) -> list[Chunk]:
+            def Fill(text: str, /) -> str:
+                return auto.re.sub(r'\s+', ' ', text)
+
+            text = Fill(original_text)
+            while len(chunks := Chunks(text)) < target:
+                text = Fill(text + ' ' + original_text)
+
+            return text
+
+        editor.value = Expand(editor.value)
+
+    def Colorize(*, positive: Editor, negative: Editor, primary: Editor):
+        """Classify and colorize editors"""
+        def Clear(text: auto.tkinter.Text, /):
+            for tag in COLORMAP.keys():
+                text.tag_remove(tag, '1.0', auto.tkinter.END)
+
+        Clear(positive.text)
+        Clear(negative.text)
+        Clear(primary.text)
+
+        classifier = Classifier(
+            positive=positive.value,
+            negative=negative.value,
+        )
+
+        def Tag(text: auto.tkinter.Text, /, *, tag: str | None, chunk: Chunk):
+            if tag is not None:
+                text.tag_add(tag, f'1.0+{chunk.offset}c', f'1.0+{chunk.offset+chunk.length}c')
+
+        def Alternate(text: auto.tkinter.Text, chunks: list[Chunk], /, *, tags: list[str | None]):
+            tags = iter(auto.itertools.cycle(tags))
+            for chunk in chunks:
+                Tag(text, tag=next(tags), chunk=chunk)
+
+        # Alternate(positive.text, pos_chunks, tags=[None, 'p1'])
+        # Alternate(negative.text, neg_chunks, tags=[None, 'n1'])
+
+        pos_chunks = Chunks(positive.value)
+        neg_chunks = Chunks(negative.value)
+
+        pos_embeds = Embeds(pos_chunks, progress=progress)
+        neg_embeds = Embeds(neg_chunks, progress=progress)
+
+        chunks = Chunks(primary.value)
+        embeds = Embeds(chunks, progress=progress)
+
+        reducer = Reduction(
+            (
+                # auto.np.vstack([pos_embeds, neg_embeds, embeds]),
+                embeds
+            ),
+            n=2,
+        )
+
+        def Colorize(
+            *,
+            text: auto.tkinter.Text,
+            chunks: list[Chunk],
+            embeds: auto.np.ndarray,
+            debug: bool=False,
+        ):
+            probs = Classify(classifier, embeds=embeds, debug=debug)
+
+            suffixes = iter(auto.itertools.cycle(['a', 'b']))
+            for chunk, prob in zip(chunks, probs):
+                if debug:
+                    print(f'{chunk.text!r}: {prob=!r}')
+
+                tag = None
+                if abs(prob) > 0.25:
+                    suffix = next(suffixes)
+
+                    level = 1
+                    if abs(prob) > 0.50:
+                        level = 2
+                        if abs(prob) > 0.75:
+                            level = 3
+
+                    if prob > 0:
+                        tag = f'p{level}{suffix}'
+                    else:
+                        tag = f'n{level}{suffix}'
+
+                Tag(text, tag=tag, chunk=chunk)
+
+                XY = Reduce(reducer, embeds)
+                ax.scatter(XY[:, 0], XY[:, 1], c=COLORMAP.get(tag, 'k'))
+
+        ax.clear()
+        Colorize(text=positive.text, chunks=pos_chunks, embeds=pos_embeds)
+        Colorize(text=negative.text, chunks=neg_chunks, embeds=neg_embeds)
+        Colorize(text=primary.text, chunks=chunks, embeds=embeds)
+        canvas.draw()
+
+    def Save(*, positive: Editor, negative: Editor, primary: Editor):
+        """Save buffers"""
+        if not CONFIG_ROOT.exists():
+            print(f'Creating directory: {CONFIG_ROOT!r}')
+            CONFIG_ROOT.mkdir(parents=True, exist_ok=True)
+        
+        def Save(name: str, editor: Editor, /):
+            path = CONFIG_PATHS[name]
+            print(f'Saving file: {path!r}')
+            path.write_text(editor.value)
+
+        progress.config(maximum=4, value=0)
+
+        Save('positive', positive)
+        progress.step(1); progress.update()
+
+        Save('negative', negative)
+        progress.step(1); progress.update()
+
+        Save('primary', primary)
+        progress.step(1); progress.update()
+
+        path = CONFIG_PATHS['cache']
+        print(f'Saving file: {path!r}')
+        with open(path, 'w') as f:
+            auto.json.dump(cache, f)
+        progress.step(1); progress.update()
+
+    def Complete(editor: Editor, /):
+        model = auto.llm.get_model(completion_model_name)
+
+        prompt = (
+            f"""think about this passage but don't say anything yet.\n"""
+            f"""\n"""
+            f"""{editor.value}\n"""
+            f"""\n"""
+            f"""Now, write a paragraph that elicits the same ideas as the passage."""
+        )
+
+        completion = model.prompt(prompt).text()
+
+        editor.value = completion
+
+    a = auto.tkinter.Frame(tk)
+    b = auto.tkinter.Frame(tk)
+    c = auto.tkinter.Frame(tk)
+    f = auto.tkinter.Frame(tk)
+    p = auto.tkinter.Frame(tk, height=32)
+
+    auto.mediocreatbest.Grid(tk, [
+        [a, c],
+        [f, c],
+        [b, c],
+        [p, p],
+    ])
+    # p.grid(sticky='sew')
+    tk.grid_rowconfigure(3, weight=0)
+
+    fig = auto.mpl.figure.Figure(figsize=(4, 4), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.plot(auto.np.sin(auto.np.linspace(-3, 3, num=100)))
+
+    canvas = auto.mpl.backends.backend_tkagg.FigureCanvasTkAgg(fig, master=f)
+    canvas.draw()
+    auto.mediocreatbest.Grid(f, [
+        [canvas.get_tk_widget()],
+    ])
+
+    progress = auto.tkinter.ttk.Progressbar(p, mode='determinate')
+    auto.mediocreatbest.Grid(p, [
+        [progress],
+    ])
+
+    positive = Editor(a, value=positive_text)
+    Configure(positive.text, foreground=-1)
+    auto.mediocreatbest.Grid(a, [
+        [positive],
+    ])
+    positive.text.bind('<Control-Return>',
+        PreventDefault(Expand, positive),
+    )
+    positive.text.bind('<Alt-Return>',
+        PreventDefault(Complete, positive),
+    )
+
+    negative = Editor(b, value=negative_text)
+    Configure(negative.text, foreground=+1)
+    auto.mediocreatbest.Grid(b, [
+        [negative],
+    ])
+    negative.text.bind('<Control-Return>',
+        PreventDefault(Expand, negative),
+    )
+    negative.text.bind('<Alt-Return>',
+        PreventDefault(Complete, negative),
+    )
+
+    primary = Editor(c, value=primary_text)
+    Configure(primary.text, foreground=0)
+    auto.mediocreatbest.Grid(c, [
+        [primary],
+    ])
+    primary.text.bind('<Control-Return>',
+        PreventDefault(Colorize, positive=positive, negative=negative, primary=primary),
+    )
+    primary.text.bind('<Control-s>',
+        PreventDefault(Save, positive=positive, negative=negative, primary=primary),
+    )
+
+    tk.mainloop()
+
+
+def cli():
+    import argparse
+
+    def Buffer(name: str, /) -> auto.typing.Generator[None, argparse.ArgumentParser | dict[str, any] | None, None]:
+        path = CONFIG_PATHS[name]
+        if not path.exists():
+            path = None
+
+        parser = yield
+        parser.add_argument(f'--{name}-text',
+            default=None,
+        )
+        parser.add_argument(f'--{name}-file',
+            default=path,
+            type=auto.pathlib.Path,
+        )
+
+        args = yield
+        path = args.pop(f'{name}_file')
+        if args[f'{name}_text'] is None:
+            if path is not None:
+                args[f'{name}_text'] = path.read_text()
+            else:
+                args[f'{name}_text'] = ''
+
+        yield  # dummy
+
+    buffers = []
+    buffers.append(Buffer('positive'))
+    buffers.append(Buffer('negative'))
+    buffers.append(Buffer('primary'))
+    for buffer in buffers:
+        next(buffer)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--completion-model-name', default='gpt-3.5-turbo')
+    parser.add_argument('--embedding-model-name', default='BAAI/bge-small-en')
+    parser.add_argument('--embedding-tokenizer-name', default=None)
+    parser.add_argument('--demo', action='store_true')
+    for buffer in buffers:
+        buffer.send(parser)
+    args = vars(parser.parse_args())
+
+    if args['embedding_tokenizer_name'] is None:
+        args['embedding_tokenizer_name'] = args['embedding_model_name']
+
+    if args.pop('demo'):
+        def Clean(s: str) -> str:
+            s = auto.re.split(r'\n\n+', s)
+            s = [auto.re.sub(r'\s+', ' ', s) for s in s]
+            s = [s.strip() for s in s]
+            s = "\n\n".join(s)
+            s = s.strip()
+            return s
+
+        args['positive_text'] = Clean(r"""
+            One great way to organize your notes and research is by using
+            Jupyter Notebooks. These notebooks allow you to keep all of your
+            information in one place, making it easy to access and analyze
+            everything that you need for your project or paper. With an
+            integrative approach, you can compile all of the relevant data and
+            present it in a clear and concise manner. This way, you can easily
+            see how different pieces of information relate to each other and
+            build upon each other to create a comprehensive understanding of
+            the topic at hand. By using Jupyter Notebooks with an integrative
+            approach, you can streamline your research process and produce
+            high-quality work in less time.
+        """)
+
+        args['negative_text'] = Clean(r"""
+            As a software engineer, you know that developing robust and
+            scalable applications is crucial for success. In order to achieve
+            this, you need to leverage various technologies and techniques. One
+            such technique is the use of microservices, which allows you to
+            break down your application into smaller, more manageable
+            components. These components can then be developed and maintained
+            independently, making it easier to scale each component as needed.
+
+            To make the most out of these microservices, you'll need an
+            effective visualization tool that can help you understand how your
+            system is performing under load. This will enable you to identify
+            potential bottlenecks or areas where performance could be improved.
+            With the right tools and techniques in place, it's possible to
+            build a scalable and efficient application that meets the needs of
+            your users.
+        """)
+
+        args['primary_text'] = Clean(r"""
+            \vspace{-0.05in}
+
+            Increasingly, data exploration and visualization occurs within
+            computational notebooks.  Their widespread utility has been
+            demonstrated in the fields of biology [nature], AI [colab], and
+            more.  This trend can be largely attributed to the nature of
+            computational notebooks: integrative of multiple kinds of data
+            sources, interactivity from the out-of-order cell execution, and
+            iterative composition of inputs, codes, and outputs.
+
+            In terms of data representation, computational notebooks have
+            gained support for a variety of fo rmats ranging from simple
+            tabular data to complex neuron activation networks.
+
+            In this work, we approach the challenge of integrating graph data
+            visualization into computational notebooks by using a general and
+            efficient Visualization-as-a-Service (VaaS) system.  Graph is a
+            universal representation of complex relationships and a data
+            structure common in many application domains.  A widespread ability
+            to understand the complex relationships embedded within those big
+            graphs will enable and accelerate discoveries.
+
+            Our VaaS system is centered on a domain specific language called
+            the Graph Shader (GS) language.  The design of GS is intended to
+            provide a reusable and efficient interface to give users an
+            expressive means to control graph renderings.  Typically,
+            interacting with a graph means to pan, zoom, pick or brush using a
+            pointing device like mouse or trackpad; we believe graph shaders
+            can provide an additional means of exploration.  GS is inspired by
+            how GLSL shaders have enabled OpenGL renderings to become more
+            creative and expressive.  From this respect, we've designed GS to
+            help users to express their exploratory hypotheses more effectively
+            using graph primitives.  Corresponding to vertex, geometry and
+            fragment shaders that are available in GLSL shaders, GS also has
+            three components: (i) positional, (ii) relational, and (iii)
+            appearance shaders.  The GS VaaS parses GS and automatically
+            generates the corresponding GLSL shaders in a transpiling process.
+            In this way, any graphics hardware that support current OpenGL
+            standard will be able to support graph renderings that use GS.
+
+            Graph Shaders also draw inspiration from the design of OpenMP
+            programs and their use of ``\texttt{\#pragma}'' statements to
+            interleave compiler directives within ordinary lines of code.
+            Using \texttt{pragma} directives, programs in GS can opt in to
+            restrictive data access patterns to improve their performance.  The
+            combination of code in GS and \texttt{pragma} statements enables
+            the code to become a standalone GS program that can be executed by
+            the GS VaaS.  Graph data is made available to GS using OpenGL's
+            Shader Storage Buffer Objects (SSBOs), allowing for simplistic and
+            powerful data access patterns.
+
+            We use three driving applications to demonstrate analytical
+            benefits of GS.  Each application targets a particular dataset,
+            with sizes ranging from 1.2 to 3.8 million nodes and 6.2 to 63.5
+            million edges.  In all cases, the driving application falls under
+            the use scenario where the graph that contains large and complex
+            relationships that will continue to evolve over time, and it's
+            beneficial to host the most up to date version of the data as a
+            cloud resource for remote users to share and use. The specific
+            example use cases are:
+
+            \begin{itemize}
+
+            \item To identify the evolving interdependency networks among
+            open-source projects using the JS-Deps dataset of JavaScript
+            Dependencies among NPM packages~\cite{npm} (shown in
+            Figure~\ref{fig:graph:JS-Deps}).
+
+            \item To reveal conversation patterns and relationships among users
+            on an online platform, such as Stack Overflow, using the SO-Answers
+            dataset from the SNAP project~\cite{snapnets} (shown in
+            Figure~\ref{fig:graph:SO-Answers-1234}).
+
+            \item To track the citation networks between patent applications of
+            US Patent and Trademark Office using the NBER-Patents
+            dataset~\cite{hall200213} (shown in
+            Figure~\ref{fig:graph:NBER-Patents-grid}).
+
+            \end{itemize}
+
+            The remainder of this work is organized as follows.  We start with
+            describing the background and proceed with
+            Section~\ref{sec:graph:design} about our development of the GS VaaS
+            and the GS language.  The results in
+            Section~\ref{sec:graph:results} show the efficiency of our system.
+            Section~\ref{sec:graph:apps} showcases three applications for the
+            visualization and analysis of large graph data.  We conclude and
+            discuss future work in Section~\ref{sec:graph:conclusion}.
+        """)
+
+    for buffer in buffers:
+        buffer.send(args)
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()
+

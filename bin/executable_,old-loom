@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from mediocreatbest import auto
+auto.register('tk',
+    import_names=['tkinter', 'tkinter.ttk'],
+)
+auto.register('ttk',
+    import_names=['tkinter.ttk', 'tkinter'],
+)
+
+auto.register('PIL',
+    import_names=['PIL', 'PIL.Image', 'PIL.ImageTk'],
+)
+
+
+class Registry(type):
+    @auto.functools.wraps(type.__init__)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__registry = []
+
+    def __getitem__(self, key: any, /) -> any:
+        # print(f'getitem {id(self.__registry)=!r}')
+        for k, v in self.__registry:
+            if k is key:
+                return v
+        
+        raise KeyError(f"No {key!r} found in registry")
+
+    def __setitem__(self, key: any, value: any, /) -> any:
+        # print(f'setitem {id(self.__registry)=!r}')
+        self.__registry.append((key, value))
+
+
+@auto.dataclasses.dataclass
+class Point:
+    x: float
+    y: float
+
+
+@auto.dataclasses.dataclass
+class Region(metaclass=Registry):
+    xlo: float
+    xhi: float
+    ylo: float
+    yhi: float
+
+    def __post_init__(self):
+        assert self.xlo <= self.xhi
+        assert self.ylo <= self.yhi
+
+
+Region[1] = Region(
+    xlo=0,
+    xhi=1,
+    ylo=0,
+    yhi=1,
+)
+
+
+@auto.dataclasses.dataclass
+class Action:
+    region: Region
+    type: auto.typing.Literal['hover']
+    tags: list[str]
+    frame_id: int
+
+
+@auto.dataclasses.dataclass
+class Archive:
+    region: Region
+    actions: list[Action]
+    frames: list[auto.PIL.Image.Image]
+
+
+def Actions(data: list[dict], /) -> list[Action]:
+    actions = []
+    for child in data['children']:
+        type = child['type']
+
+        xlo, ylo, xhi, yhi = child['boundingBox']
+        assert xlo <= xhi
+        assert ylo <= yhi
+
+        tags: str = child['tags']
+        tags: list[str] = tags.split(' ')
+
+        frame_id = child['position']
+
+        region = Region(
+            xlo=xlo,
+            xhi=xhi,
+            ylo=ylo,
+            yhi=yhi,
+        )
+
+        action = Action(
+            region=region,
+            type=type,
+            tags=tags,
+            frame_id=frame_id,
+        )
+        Region[action] = region
+        actions.append(action)
+
+    return actions
+
+
+def Frames(path: auto.pathlib.Path, /) -> list[auto.PIL.Image]:
+    with auto.tempfile.NamedTemporaryFile('wb') as dst:
+        with path.open('rb') as src:
+            auto.shutil.copyfileobj(src, dst)
+        dst.flush()
+
+        args = [
+            'ffmpeg',
+            '-i', dst.name,
+            '-c:v', 'ppm',
+            '-f', 'image2pipe',
+            '-',
+        ]
+
+        with auto.subprocess.Popen(
+            args,
+            stdout=auto.subprocess.PIPE,
+        ) as process:
+            frames = []
+            while True:
+                kind = process.stdout.readline()
+                if kind == b'':
+                    break
+
+                assert kind == b'P6\n'
+
+                size = process.stdout.readline()
+                width, height = size.decode('ascii').strip().split(' ')
+                width, height = map(int, (width, height))
+
+                maximum = process.stdout.readline()
+                assert maximum == b'255\n'
+
+                frame = process.stdout.read(width * height * 3)
+                frame = auto.PIL.Image.frombytes('RGB', (width, height), frame, 'raw')
+                # frame = auto.PIL.ImageTk.PhotoImage(frame)
+                Region[frame] = Region(
+                    xlo=0,
+                    xhi=width,
+                    ylo=0,
+                    yhi=height,
+                )
+
+                frames.append(frame)
+
+    return frames
+
+
+def Load(root: auto.pathlib.Path, /) -> Archive:
+    def Load(path: auto.pathlib.Path, /) -> dict:
+        with path.open('r') as f:
+            return auto.json.load(f)
+
+    data = Load(root / 'action_map.json')
+
+    actions = Actions(data)
+    frames = Frames(root / 'video.mp4')
+    region = Region[frames[0]]
+
+    archive = Archive(
+        region=region,
+        actions=actions,
+        frames=frames,
+    )
+    Region[archive] = archive.region
+
+    return archive
+
+
+def Grow(a: Region, b: Region, /) -> Region:
+    xlo = min(a.xlo, b.xlo)
+    xhi = min(a.xhi, b.xhi)
+    ylo = min(a.ylo, b.ylo)
+    yhi = min(a.yhi, b.yhi)
+    return Region(
+        xlo=xlo,
+        xhi=xhi,
+        ylo=ylo,
+        yhi=yhi,
+    )
+
+
+def Resize(image: auto.PIL.Image.Image, size: tuple[int, int], /) -> tuple[auto.PIL.Image.Image, tuple[int, int]]:
+    # Thanks https://stackoverflow.com/a/14731922
+    ratio = min(size[0] / image.width, size[1] / image.height)
+    width = int(image.width * ratio)
+    height = int(image.height * ratio)
+    return image.resize((width, height)), (width, height)
+
+
+def Remap(p: Point | Region, a: Region, b: Region, /) -> Point:
+    if isinstance(p, Region):
+        lo = Point(x=p.xlo, y=p.ylo)
+        hi = Point(x=p.xhi, y=p.yhi)
+        lo = Remap(lo, a, b)
+        hi = Remap(hi, a, b)
+        return Region(
+            xlo=lo.x,
+            xhi=hi.x,
+            ylo=lo.y,
+            yhi=hi.y,
+        )
+
+    x, y = p.x, p.y
+    # print(f'0. {x=:0.1f} {y=:0.1f} {a=!r}')
+    x = (x - a.xlo) / (a.xhi - a.xlo)
+    y = (y - a.ylo) / (a.yhi - a.ylo)
+    # print(f'1. {x=:0.1f} {y=:0.1f} {b=!r}')
+    x = x * (b.xhi - b.xlo) + b.xlo
+    y = y * (b.yhi - b.ylo) + b.ylo
+    # print(f'2. {x=:0.1f} {y=:0.1f}')
+    return Point(x=x, y=y)
+
+
+def main(inpfile: auto.pathlib.Path):
+    with auto.zipfile.ZipFile(inpfile, 'r') as zipfile:
+        archive = Load( auto.zipfile.Path(inpfile) )
+
+    root = auto.tk.Tk()
+    root.title('Loom')
+    root.geometry('640x480')
+    root.attributes('-zoomed', True)
+    Region[root] = Region(
+        xlo=0,
+        xhi=root.winfo_width(),
+        ylo=0,
+        yhi=root.winfo_height(),
+    )
+
+    canvas = auto.tk.Canvas(root)
+
+    auto.mediocreatbest.Grid(root, [
+        [canvas],
+    ])
+
+    state = 0
+
+    width, height = None, None
+    image = None
+    def redraw(event=None):
+        nonlocal width, height, image
+
+        canvas.delete('all')
+
+        width = root.winfo_width()
+        height = root.winfo_height()
+        print((width, height))
+
+        Region[root] = Region(
+            xlo=0,
+            xhi=root.winfo_width(),
+            ylo=0,
+            yhi=root.winfo_height(),
+        )
+        print(f'{Region[root]=!r}')
+
+        frame = archive.frames[state]
+
+        image = frame
+        # print(image.width, image.height)
+        image, (width, height) = Resize(image, (width, height))
+
+        # print(image.width, image.height)
+        image = auto.PIL.ImageTk.PhotoImage(image)
+        Region[image] = Region(
+            xlo=0,
+            xhi=width,
+            ylo=0,
+            yhi=height,
+        )
+
+        canvas.create_image((0, 0), anchor=auto.tk.NW, image=image)
+
+        for action in archive.actions:
+            region = Remap(Region[action], Region[archive], Region[image])
+            # print(region)
+            canvas.create_rectangle(
+                (region.xlo, region.ylo, region.xhi, region.yhi),
+                outline='#FF00FF',
+            )
+
+    root.after(1000, redraw)
+    root.bind('<Configure>', redraw)
+
+    def motion(event):
+        nonlocal state
+
+        # x = event.x_root - event.winfo_x()
+        # y = event.y_root - event.winfo_y()
+        x = event.x
+        y = event.y
+        # print((x, y))
+        for action in archive.actions:
+            region = Remap(Region[action], Region[archive], Region[image])
+            if (region.xlo <= x <= region.xhi) and \
+               (region.ylo <= y <= region.yhi):
+                canvas.create_rectangle(
+                    (region.xlo, region.ylo, region.xhi, region.yhi),
+                    fill='#00FFFF',
+                )
+
+                state = action.frame_id
+                break
+        else:
+            return
+
+        redraw()
+
+    canvas.bind('<Motion>', motion)
+    # canvas.bind('<Button-1>', motion)
+        
+
+    root.mainloop()
+
+
+def cli():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('inpfile', type=auto.pathlib.Path)
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

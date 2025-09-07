@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+import sys
+from copy import copy
+
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(sys.stdin.read(), 'html.parser')
+for el in soup.findAll():
+    for k in copy(el.attrs):
+        del el[k]
+
+    s = list(el.strings)
+    ss = list(el.stripped_strings)
+    if len(s) == 1 == len(ss):
+        s[0].replace_with(ss[0])
+
+sys.stdout.write(soup.encode(formatter=None).decode('utf-8'))

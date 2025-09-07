@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+import shlex, os, sys
+
+args = sys.argv[1:]
+index = args.index('--')
+left, right = args[:index], args[index+1:]
+
+right = [shlex.join(right)]
+print(left, right)
+
+args = left + right
+os.execv('/usr/bin/ssh', ['ssh'] + left + right)
+print(f'Exec failed')
+exit(1)

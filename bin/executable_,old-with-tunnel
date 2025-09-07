@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+from __future__ import annotations
+from concurrent.futures import ThreadPoolExecutor
+import subprocess
+from dataclasses import dataclass
+from contextlib import ExitStack
+from time import sleep
+import socket
+import os
+import shlex
+
+
+@dataclass
+class Address:
+    ip: str
+    port: int
+
+
+@dataclass
+class Tunnel:
+    host: str
+    styx: Address
+    health: Address
+
+
+def debug_args(args: List[str]):
+    def f(s: str) -> str:
+        if len(args := shlex.split(s)) > 1:
+            return '[' + debug_args(args) + ']'
+        return s
+
+    return " ".join(map(f, args))
+
+                            #listen -A 'tcp!{tunnel.health.ip}!{tunnel.health.port}' {{echo 'Listening on tcp!{tunnel.health.ip}!{tunnel.health.port}...' >[1=2]; cat}}
+
+def main(tunnels: List[Tuple[str, str, str]]):
+    with ExitStack() as stack, \
+         ThreadPoolExecutor(max_workers=len(tunnels)) as executor:
+        for tunnel in tunnels:
+            args = [
+                'ssh',
+                f'-L{tunnel.styx.ip}:{tunnel.styx.port}:{tunnel.styx.ip}:{tunnel.styx.port}',
+                f'-L{tunnel.health.ip}:{tunnel.health.port}:{tunnel.health.ip}:{tunnel.health.port}',
+                f'{tunnel.host}',
+                shlex.join([
+                    'bash', '-c', shlex.join([
+                        'emu', '/dis/sh.dis', '-c', f'''
+                            bind '#U*/home' /usr;
+                            listen -A 'tcp!{tunnel.styx.ip}!{tunnel.styx.port}' export /
+                            echo 'Listening on tcp!{tunnel.styx.ip}!{tunnel.styx.port}...' >[1=2]
+                        ''',
+                    ]), '<,with-tunnel>',
+                ]),
+            ]
+            print(f'$ {debug_args(args)}')
+            process = stack.enter_context(subprocess.Popen(
+                args,
+                stdin=subprocess.DEVNULL,
+            ))
+
+            sleep(12)
+# 
+#             sock = socket.socket()
+#             sock.connect((tunnel.health.ip, tunnel.health.port))
+#             sock.send(b'ping')
+#             sock.shutdown(socket.SHUT_WR)
+#             sock.recv(4)
+# 
+
+        args = [
+            'emu', '/dis/sh.dis', '-c', f'''
+                bind '#U*/home' /usr;
+                bind /n /n;
+                mount {{mntgen}} /n;
+            ''' + '\n'.join([
+                f'''
+                    mount -A 'tcp!{tunnel.styx.ip}!{tunnel.styx.port}' /n/{tunnel.host};
+                '''
+                for tunnel in tunnels
+            ]) + f'''
+                wm/wm wm/logon -u {os.environ["USER"]}
+            ''',
+        ]
+        print(f'$ {debug_args(args)}')
+        stack.enter_context(subprocess.Popen(
+            args,
+        ))
+
+
+
+
+def cli():
+    def tunnel(s):
+        host, ip, port = s.rsplit(':', 2)
+        port = int(port)
+        return Tunnel(host, Address(ip, port), Address(ip, 10000 + port))
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tunnel', '-t', dest='tunnels', type=tunnel, action='append', default=[])
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()
+

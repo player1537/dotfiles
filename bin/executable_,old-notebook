@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+go-accona() {
+    :
+}
+
+go-local() {
+    # notebook_dir="/media/thobson/SD CARD A/Jupyter Notebooks"
+    # notebook_dir="${HOME:?}/Documents"
+    notebook_dir="${HOME:?}/share/notebooks"
+
+    # mkdir -vp -- \
+    #     "${notebook_dir:?}" \
+    # ##
+
+    JUPYTER_TOKEN=xxx \
+    exec python3 -m jupyter notebook \
+        --no-browser \
+        --notebook-dir="${notebook_dir:?}" \
+        --port 7835 \
+        --NotebookApp.local_hostnames="['localhost', '${HOSTNAME}.localhost', '${HOSTNAME}']" \
+        --NotebookApp.allow_remote_access=True \
+    ##
+}
+
+"go-${@:-local}"

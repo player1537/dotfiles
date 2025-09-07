@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+go-firefox() {
+    MOZ_USE_XINPUT2=1 \
+    exec firefox "$@"
+}
+
+go-web() {
+    go-firefox "$@"
+}
+
+go-spack() {
+    go-web "https://packages.spack.io/package.html?name=$1:?}"
+}
+
+go-intel() {
+    go-web "ext+container:name=Intel&url=${1:?}"
+}
+
+go-goto() {
+    go-intel "http://goto/${1:?}"
+}
+
+go-jira() {
+    go-intel "https://jira.devtools.intel.com/browse/${1:?}"
+}
+
+go-"${0##*/,}" "$@"
+

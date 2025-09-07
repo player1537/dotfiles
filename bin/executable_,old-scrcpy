@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+adb=scrcpy.adb
+scrcpy=scrcpy
+
+unset usb
+unset tcp
+unset rate
+unset app
+unset size
+unset title
+
+if [ -n "${1:+isset}" ]; then
+    tcp=
+
+    if [ -n "${2:+isset}" ]; then
+        rate=${2:?}
+    fi
+
+    if [ -n "${3:+isset}" ]; then
+        app=${3:?}
+    fi
+else
+    usb=
+
+    if [ -n "${2:+isset}" ]; then
+        app=${2:?}
+    fi
+fi
+
+declare -A wwidths
+wwidths["sm"]=$((401/1))
+wwidths["md"]=$((401/1))
+
+declare -A wheights
+wheights["sm"]=$((876/2))
+wheights["md"]=$((876/1))
+
+declare -A dwidths
+dwidths["sm"]=$((1080/1))
+dwidths["md"]=$((1080/1))
+
+declare -A dheights
+dheights["sm"]=$((2280/2))
+dheights["md"]=$((2280/1))
+
+declare -A sizes
+sizes["calendar"]=md
+sizes["slack"]=md
+
+declare -A apps
+apps["slack"]="?slack"
+apps["textra"]="?textra"
+apps["ytmusic"]="com.google.android.apps.youtube.music"
+apps["calendar"]="com.google.android.calendar"
+apps["gmail"]="com.google.android.gm"
+apps["chat"]="com.google.android.apps.dynamite"
+
+declare -A titles
+titles["slack"]="scrcpy - Slack"
+titles["textra"]="scrcpy - Textra"
+
+if [ -n "${app+isset}" ] && [ -n "${apps["${app:?}"]+isset}" ]; then
+    # title=${titles["${app:?}"]:?}
+
+    if [ -n "${sizes["${app:?}"]+isset}" ]; then
+        size=${sizes["${app:?}"]:?}
+    fi
+
+    app=${apps["${app:?}"]:?}
+fi
+
+: ${size=sm}
+wwidth=${wwidths["${size:?}"]:?}
+wheight=${wheights["${size:?}"]:?}
+dwidth=${dwidths["${size:?}"]:?}
+dheight=${dheights["${size:?}"]:?}
+
+display=$(scrcpy \
+    ${usb+--select-usb} \
+    ${tcp+--tcpip=vega.cloudforest-bee.ts.net:${1:?}} \
+    --list-displays \
+    2>&1 \
+| awk '/--display-id=/ { x=$1 } END { print x }'
+)
+
+exec \
+"${scrcpy:?}" \
+    --disable-screensaver \
+    --no-clipboard-autosync \
+    --no-audio \
+    --no-audio-playback \
+    ${usb+--select-usb} \
+    ${tcp+--tcpip=vega.cloudforest-bee.ts.net:${1:?}} \
+    ${rate+--video-bit-rate=${rate:?}} \
+    --stay-awake \
+    --turn-screen-off \
+    ${app+--new-display="${dwidth:?}x${dheight?}/374"} \
+    ${app+--window-width="${wwidth:?}"} \
+    ${app+--window-height="${wheight:?}"} \
+    ${app+"--start-app=+${app:?}"} \
+##
+
+exit 1
+    --new-display=$((1080/1))x$((2280/2))/$((374/1)) \
+    --new-display=3024x1964/254 \
+    ${display:?} \
+
+    --power-off-on-close \
+    --turn-screen-off \
+
+    --video-bit-rate=8K \
+    --max-fps=1 \
+    --tcpip=vega.cloudforest-bee.ts.net:38189 \

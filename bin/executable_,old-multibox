@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+go-root@seelab() {
+    tmux \
+        new-session \
+        -A \
+        -s multibox \
+        ssh -t accona \
+            "hostname; exec sudo su" \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh -t sinai \
+            "hostname; exec sudo su" \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh -t kavir \
+            "hostname; exec sudo su" \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh -t gobi \
+            "hostname; exec sudo su" \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh -t sahara \
+            "hostname; exec sudo su" \
+    \; \
+        select-layout \
+        -t multibox:0 \
+        -E \
+        even-vertical \
+    ##
+}
+
+go-seelab() {
+    tmux \
+        new-session \
+        -A \
+        -s multibox \
+        ssh accona \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh sinai \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh kavir \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh gobi \
+    \; \
+        split-window \
+        -t multibox:0 \
+        ssh sahara \
+    \; \
+        select-layout \
+        -t multibox:0 \
+        -E \
+        even-vertical \
+    ##
+}
+
+"go-${@:?need argument}"

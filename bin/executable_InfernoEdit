@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+
+usage() {
+	printf $'Usage: %s [-u user] [-h hostname] [-d directory] [[[user@]hostname:]/path/to/directory]\n' "${BASH_SOURCE[0]}"  >&2
+}
+
+cli() {
+	local opt OPTIND OPTARG OPTERR
+
+	while getopts "u:h:d:p:" opt; do
+	case "${opt:?}" in
+	(u) opt_user=${OPTARG:?};;
+	(h) opt_hostname=${OPTARG:?};;
+	(d) opt_directory=${OPTARG:?};;
+	(p) opt_port=${OPTARG:?};;
+	esac
+	done
+	shift $((OPTIND-1))
+	
+	if [ $# -eq 0 ]; then
+		if ! [ -n "${opt_directory+isset}" ]; then
+			usage
+			return 1
+		fi
+
+	elif [ $# -eq 1 ]; then
+		OPTARG=$1
+		case "${OPTARG:?}" in
+		(*@*:*)
+			opt_user=${OPTARG%%@*}
+			OPTARG=${OPTARG#*@}
+
+			opt_hostname=${OPTARG%%:*}
+			OPTARG=${OPTARG#*:}
+
+			opt_directory=${OPTARG:?}
+			;;
+
+		(*:*)
+			opt_hostname=${OPTARG%%:*}
+			OPTARG=${OPTARG#*:}
+
+			opt_directory=${OPTARG:?}
+			;;
+
+		(*@*)
+			printf $'Error: unexpected argument: %q\n' "${OPTARG:?}" >&2
+			usage
+			return 1
+			;;
+
+		(*)
+			opt_directory=${OPTARG:?}
+			;;
+		esac
+
+	else # [ $# .gt 1 ]
+		printf $'Error: expected 0 or 1 positional arguments: %d\n' $# >&2
+		usage
+		return 1
+
+	fi
+
+	if ! [ -n "${opt_directory+isset}" ]; then
+		printf $'Error: directory not set\n' >&2
+		usage
+		return 1
+	fi
+}
+
+InfernoEdit() {
+	local opt_user
+	local opt_hostname
+	local opt_directory
+	local opt_port
+	opt_port=6666
+
+	cli "$@"
+
+	p() { printf $'DEBUG: %s = %s\n' "${1:?}" "${!1:-empty${!1- and unset}}" >&2; }
+	p opt_user
+	p opt_hostname
+	p opt_directory
+	p opt_port
+
+	case "${opt_user+u}${opt_hostname+h}${opt_directory+d}" in
+	(uhd|hd)
+		local inferno_pid
+
+		( sleep 5 && exec emu /dis/sh.dis -c "
+			bind '#U*/home' /usr
+			mount {mntgen} /n
+			mount -c -A 'tcp!127.1.2.3!${opt_port:?}' /n/workspace
+			wm/wm {
+				wm/logon -u $USER
+				cd /n/workspace
+				acme
+			}
+		") &
+		inferno_pid=$!
+
+		printf -v escaped $' %q' \
+			exec bash -l -c 'exec "$@"' '<InfernoEdit>' \
+			'emu' /dis/sh.dis -c "
+				listen -A 'tcp!127.1.2.3!${opt_port:?}' { export '#U*${opt_directory:?}' }
+			"
+
+		ssh \
+			${opt_user+-l "${opt_user:?}"} \
+			-oServerAliveInterval=60 \
+			-L127.1.2.3:${opt_port:?}:127.1.2.3:${opt_port:?} \
+			"${opt_hostname:?}" \
+			"${escaped:?}"
+
+		kill "${inferno_pid:?}"
+		wait "${inferno_pid:?}"
+
+		;;
+
+	(d)
+		opt_directory=$(realpath "${opt_directory:?}")
+
+		emu /dis/sh.dis -c "
+			bind '#U*/home' /usr
+			mount {mntgen} /n
+			bind -c '#U*${opt_directory}' /n/workspace
+			wm/wm {
+				wm/logon -u $USER
+				cd /n/workspace
+				acme
+			}
+		"
+
+		;;
+	esac
+}
+
+
+InfernoEdit "$@"
+

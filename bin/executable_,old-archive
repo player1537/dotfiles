@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+repo=${1:?need repository}
+
+case "${repo:?}" in
+(https://github.com/*/*.git)
+
+    tar=${HOME:?}/${repo##*/}.tar.gz
+
+    tar zcvf "${tar:?}" "${HOME:?}/var/git/${repo#https://}"
+
+;;
+esac

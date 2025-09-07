@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+self=${BASH_SOURCE[0]:?}
+p() { >&2 printf \$; >&2 printf ' %q' "$@"; >&2 printf '\n'; "$@"; }
+pexec() { p exec "$@"; }
+
+autoadb=${HOME:?}/opt/autoadb/bin/autoadb
+adb=scrcpy.adb
+scrcpy=scrcpy
+
+autoadb_unit=autoscrcpy@autoadb.service
+adb_unit=autoscrcpy@adb.service
+scrcpy_unit=autoscrcpy@scrcpy.service
+
+go-adb() {
+    pexec \
+    "${adb:?}" \
+        ${1:+-s "${1:?}"} \
+        forward \
+            tcp:8888 \
+            tcp:8888 \
+    ##
+}
+
+go-scrcpy() {
+    pexec \
+    "${scrcpy:?}" \
+        ${1:+--serial="${1:?}"} \
+        --disable-screensaver \
+        --turn-screen-off \
+        --no-clipboard-autosync \
+        --shortcut-mod=lctrl+lalt \
+        --power-off-on-close \
+    ##
+}
+        # --bit-rate=1K 
+
+go-onconnect() {
+    p "${self:?}" \
+        adb \
+        "$@" \
+    ##
+
+    pexec \
+    systemd-run \
+        --user \
+        --collect \
+        --unit="${scrcpy_unit:?}" \
+            "${self:?}" \
+            scrcpy \
+            "$@" \
+    ##
+}
+
+go-autoadb() {
+    pexec \
+    "${autoadb:?}" \
+        "${self:?}" \
+        onconnect \
+        "{}" \
+    ##
+}
+
+go-start() {
+    pexec \
+    systemd-run \
+        --user \
+        --collect \
+        --unit="${autoadb_unit:?}" \
+            "${self:?}" \
+            autoadb \
+    ##
+}
+
+go-log() {
+    pexec \
+    journalctl \
+        --user \
+        --unit="${autoadb_unit:?}" \
+        --unit="${scrcpy_unit:?}" \
+        --follow \
+    ##
+}
+
+go-stop() {
+    pexec \
+    systemctl \
+        --user \
+        stop \
+            "${autoadb_unit:?}" \
+            "${scrcpy_unit:?}" \
+    ##
+}
+
+"go-${@:-start}"

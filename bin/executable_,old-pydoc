@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+PYTHON=${HOME:?}/tmp/gpt-fine-tuning/venv/bin/python
+DOCDIR=${HOME:?}/Documents/Reference/Python
+
+glob() {
+    local prefix outvar code
+    prefix=${1:?need prefix}
+    outvar=${2:?need outvar}
+
+    IFS= read -r -d '' code <<'EOF'
+import sys, importlib
+module_name = sys.argv[1]
+module = importlib.import_module(module_name)
+for name in dir(module):
+    if name.startswith('__'):
+        continue
+    print(f"{module_name}.{name}")
+EOF
+
+    exec < <(exec "${PYTHON:?}" \
+        -c "${code:?}" \
+        "${prefix:?}" \
+        ##
+    )
+
+    IFS=$'\n' read -r -d '' -a "${outvar:?}"
+
+    exec <&-
+}
+
+main() {
+    local opt_names
+    cli "$@" \
+    || die "Command line parsing failed"
+
+    local rc name dest skipped
+    rc=0
+    skipped=0
+    for name in "${opt_names[@]}"; do
+        dest=${DOCDIR:?}/${name:?}.txt
+
+        if [ -e "${dest:?}" ]; then
+            ((++skipped))
+            continue
+        fi
+
+        if [ "${skipped:?}" -gt 0 ]; then
+            >&2 printf -- \
+                $'Skipped %d existing files\n' \
+                "${skipped:?}" \
+                ##
+            skipped=0
+        fi
+
+        if ! text=$("${PYTHON:?}" -m pydoc "${name:?}"); then
+            >&2 printf $'Error: %s\n' "${text:?}"
+            rc=1
+            continue
+        fi
+
+        >"${dest:?}" \
+        printf -- \
+            $'%s' \
+            "${text:?}" \
+            ##
+        
+        printf -- \
+            $'Wrote to %q\n' \
+            "${dest:?}" \
+            ##
+    done
+
+    exit "${rc:?}"
+}
+
+usage() {
+    >&2 printf $'Usage: %q <NAME>\n' "${0:?}"
+    >&2 printf $'Example: %q datasets.load_dataset\n' "${0:?}"
+}
+
+die() {
+    >&2 printf $'Error: %s\n' "$*"
+    usage
+    exit 1
+}
+
+cli() {
+    local name names
+
+    if [ $# -eq 0 ] || [ "${1:-'-h'}" = "-h" ] || [ "${1:-'--help'}" = "--help" ]; then
+        usage
+        exit 1
+    fi
+
+    while [ $# -gt 0 ]; do
+        name=${1:?need name}
+        shift
+
+        if re='^.*\.\*$'; [[ $name =~ $re ]]; then
+            glob "${name%'.*'}" names
+            opt_names+=( "${names[@]}" )
+        
+        else
+            opt_names+=( "${name:?}" )
+        fi
+    done
+
+    for name in "${opt_names[@]}"; do
+        case "${name:?}" in
+        (*/*) die "Name is invalid: '${name:?}'";;
+        esac
+    done
+}
+
+main "$@"

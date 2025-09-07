@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+printf -v path -- \
+    '%s/record-%(%Y-%m-%d-%H%M)T.mp4' \
+    "${HOME:?}/tmp" \
+    -1 \
+##
+
+ffmpeg -video_size 1366x768 -framerate 25 -f x11grab -i :0.0+0,0 -y "${path:?}" \
+##
+
+printf $'Wrote to %s\n' \
+    "${path:?}" \
+##
+
+

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+exec < <(exec sed -e 's/\.[ \t\n]*/.\n/g')
+exec fold -w 80 -s

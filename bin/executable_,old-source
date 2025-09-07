@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+die() {
+    local IFS
+    IFS=' '
+
+    >&2 printf $'Error: %s\n' "${*}"
+    exit 1
+}
+
+main() {
+    local opt_dir opt_package
+
+    local OPTIND OPTARG OPTERR opt
+    while getopts "d:" opt; do
+        case "${opt:?}" in
+        (d) opt_dir=${OPTARG:?};;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    opt_package=${1:?need package name}
+
+    if [ -z "${opt_dir+isset}" ]; then
+        opt_dir=${HOME:?}/tmp/${opt_package:?}
+    fi
+
+    mkdir -p "${opt_dir:?}" \
+    || die "Failed to mkdir: ${opt_dir:?}"
+
+    cd "${opt_dir:?}" \
+    || die "Failed to chdir: ${opt_dir:?}"
+
+    local -A before
+    local f
+    for f in "${opt_dir:?}"/*; do
+        before["${f:?}"]=1
+    done
+
+    apt-get source "${opt_package:?}" \
+    || die "Failed to apt-get source: ${opt_package:?}"
+
+    >&2 printf $'Unpacked source code into: %q\n' "${opt_dir:?}"
+
+    for f in "${opt_dir:?}"/*; do
+        if [ -z "${before["${f:?}"]+isset}" ]; then
+            >&2 printf $'Created: %q\n' "${f:?}"
+        fi
+    done
+}
+
+main "$@"

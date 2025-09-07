@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""
+
+"""
+from __future__ import annotations
+from pathlib import Path
+from configparser import ConfigParser
+
+
+def main(file, key):
+    config = ConfigParser()
+    config.read(file)
+
+    print(config['DEFAULT'][key])
+
+
+def cli():
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file', '-f', type=Path,
+        default=Path.home() / 'share' / 'reference.ini')
+    parser.add_argument('key')
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

@@ -1,0 +1,80 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i bash -p bash
+self=${BASH_SOURCE[0]:?}
+set -euo pipefail
+
+declare -A binds
+declare -A ports
+binds["colab@accona"]=127.221.72.216
+ports["colab@accona"]=39550
+
+go---ssh() {
+    local hostname
+    hostname=${1:?need hostname}
+
+    bind=${binds["colab@${hostname:?}"]:?}
+    port=${ports["colab@${hostname:?}"]:?}
+
+    ssh \
+    -L"127.0.0.1:${port:?}:${bind:?}:${port:?}" \
+    -t \
+    "${hostname:?}" \
+        tmux \
+        new-session \
+        -A \
+        -s colab \
+        -n "${bind:?}:${port:?}" \
+    ##
+}
+
+go---local() {
+    bind=$(,address "colab@${HOSTNAME:?}" +127.0.0.1:%P)
+    >&2 printf $'Listening on %s\n' \
+        "${bind:?}" \
+    ##
+
+    exec docker run \
+        --interactive \
+        --tty \
+        --name=colab \
+        --mount="type=bind,src=/home,dst=/home,readonly=true" \
+        --publish="${bind:?}:8080" \
+        --env="JUPYTER_TOKEN=xxx" \
+        us-docker.pkg.dev/colab-images/public/runtime \
+        "$@" \
+    ##
+}
+
+go-accona() {
+    "${self:?}" --ssh accona
+}
+
+go-sinai() {
+    "${self:?}" --ssh sinai
+}
+
+go-kavir() {
+    "${self:?}" --ssh kavir
+}
+
+go-gobi() {
+    "${self:?}" --ssh gobi
+}
+
+go-thar() {
+    "${self:?}" --ssh thar
+}
+
+go-sahara() {
+    "${self:?}" --ssh sahara
+}
+
+go-daventry() {
+    "${self:?}" --local
+}
+
+go-inteldevcloud() {
+    "${self:?}" --ssh inteldevcloud
+}
+
+"go-$@"

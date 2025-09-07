@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec ssh-add \
+    -t 15m \
+    "${@:?${0:?}: need arguments}" \
+##

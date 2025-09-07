@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+
+pexec() { >&2 printf exec; >&2 printf ' %q' "$@"; >&2 printf '\n'; exec "$@"; }
+
+go-checkout() {
+    local repo where
+    repo=${1:?need repo}
+    where=${2:?need where (directory)}
+    shift 2
+    
+    case "${repo:?}" in
+    (https://github.com/*/*.git)
+        mkdir -pv \
+            "${HOME:?}/opt/src/${where:?}" \
+            ##
+            
+        pexec git \
+            -C "${HOME:?}/opt/src/${where:?}" \
+            --git-dir="${HOME:?}/var/git/${repo#https://}" \
+            --work-tree="${HOME:?}/opt/src/${where:?}" \
+            checkout "$@" .
+            ##
+        ;;
+    
+    esac
+}
+
+go-update() {
+    local repo
+    repo=${1:?need repo}
+    
+    case "${repo:?}" in
+    (https://github.com/*/*.git)
+        pexec git \
+            -C "${HOME:?}/var/git/${repo#https://}" \
+            remote \
+            update \
+            ##
+        ;;
+    
+    esac
+}
+
+go-mirror() {
+    local repo
+    repo=${1:?need repo}
+
+    case "${repo:?}" in
+    (git@bitbucket.org:*/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/bitbucket.org/${repo#*:}"
+        ;;
+
+    (git@github.com:*/*.git)
+        exec git clone \
+            --mirror \
+            "https://github.com/${repo#*:}" \
+            "${HOME:?}/var/git/github.com/${repo#*:}"
+        ;;
+
+    (https://huggingface.co/datasets/*/*.git)
+        GIT_LFS_SKIP_SMUDGE=1 \
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/huggingface.co/datasets/${repo/#"https://huggingface.co/datasets/"}" \
+        ;;
+
+    (https://huggingface.co/*/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/huggingface.co/models/${repo/#"https://huggingface.co/"}" \
+        ;;
+
+    (https://*.*/*/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/${repo#https://}"
+        ;;
+
+    (git@mediocreatbest.xyz:/srv/git/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/mediocreatbest.xyz/${repo##*/}" \
+        ##
+        ;;
+
+    (*)
+        printf $'Unknown repo: %q\n' "${repo:?}" >&2
+        return 1
+        ;;
+    esac
+}
+
+
+go-clone() {
+	local opt_upstream
+	opt_upstream=${1:?need upstream repo}; shift
+
+	local opt_origin
+
+	case "${opt_upstream:?}" in
+	(git@bitbucket.org:*/*.git)
+		opt_origin=${HOME:?}/var/git/bitbucket.org/${opt_upstream#*:}
+		;;
+
+    (git@github.com:*/*.git)
+		opt_origin=${HOME:?}/var/git/github.com/${opt_upstream#*:}
+        ;;
+
+    (git@mediocreatbest.xyz:/srv/git/*.git)
+        opt_origin=${HOME:?}/var/git/mediocreatbest.xyz/${opt_upstream##*/}
+        ;;
+
+    (https://huggingface.co/datasets/*/*.git)
+        opt_origin=${HOME:?}/var/git/datasets/${opt_upstream/#"https://huggingface.co/datasets/"}
+        ;;
+
+    (https://huggingface.co/*/*.git)
+        opt_origin=${HOME:?}/var/git/huggingface.co/models/${opt_upstream/#"https://huggingface.co/"}
+        ;;
+
+    (https://*.*/*/*.git)
+		opt_origin=${HOME:?}/var/git/${opt_upstream#https://}
+        ;;
+	esac
+
+	if [ -z "${opt_origin+isset:?}" ]; then
+		>&2 printf $'Recognized repository: %s\n' "${opt_upstream:?}"
+		return 1
+	fi
+
+    if [ $# -ge 1 ] && [ "${1:?}" = "-" ]; then
+        set -- "${opt_origin%.git}" "${@:2}"
+    fi
+
+	pexec git clone \
+		--reference-if-able "${opt_origin:?}" \
+		--dissociate \
+		"${opt_upstream:?}" \
+		"$@" \
+    ##
+}
+
+go-archive() {
+    repo=${1:?need repository}
+
+    case "${repo:?}" in
+    (https://github.com/*/*.git)
+
+        tar=${HOME:?}/${repo##*/}.tar.gz
+
+        tar zcvf "${tar:?}" \
+            -C "${HOME:?}" \
+            "var/git/${repo#https://}"
+
+    ;;
+    esac
+}
+
+go-fetch() {
+    repo=${1:?need repository}
+
+    case "${repo:?}" in
+    (https://*.*/*/*.git)
+
+        exec git \
+            -C "${HOME:?}/var/git/${repo#https://}" \
+            fetch \
+            -a \
+            ##
+
+    ;;
+    esac
+}
+
+go-"$@"

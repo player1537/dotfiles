@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+import re
+from pathlib import Path
+from email import message_from_file
+
+
+def main(input):
+    message = message_from_file(input)
+
+    for payload in message.get_payload():
+        if payload.get_content_type() == 'text/plain':
+            break
+    else:
+        raise ValueError(f'Did not find text/plain')
+
+    payload = payload.get_payload(decode=True)
+    if isinstance(payload, bytes):
+        payload = payload.decode('latin1')
+
+    payload = re.sub(r'\n\n+', '\n\n', payload)
+    payload = re.sub(r' +', ' ', payload)
+
+    print(payload)
+
+
+def cli():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input', type=argparse.FileType('r'))
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+scrcpy.adb forward tcp:8022 tcp:8022
+
+exec ssh vega "$@"
+

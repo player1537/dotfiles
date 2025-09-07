@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+--printcmd() {
+	printf $'$'
+	printf $' %q' "$@"
+	printf $'\n'
+}
+
+GitClone() {
+	local opt_upstream
+	opt_upstream=${1:?need upstream repo}; shift
+
+	local opt_origin
+
+	case "${opt_upstream:?}" in
+	(git@bitbucket.org:*/*.git)
+		opt_origin=${HOME:?}/var/git/bitbucket.org/${opt_upstream#*:}
+		;;
+
+    (git@github.com:*/*.git)
+		opt_origin=${HOME:?}/var/git/github.com/${opt_upstream#*:}
+        ;;
+
+    (https://github.com/*/*.git)
+		opt_origin=${HOME:?}/var/git/${opt_upstream#https://}
+        ;;
+	esac
+
+	if [ -z "${opt_origin+isset:?}" ]; then
+		>&2 printf $'Recognized repository: %s\n' "${opt_upstream:?}"
+		return 1
+	fi
+
+	set -- \
+	git clone \
+		--reference-if-able "${opt_origin:?}" \
+		--dissociate \
+		"${opt_upstream:?}" \
+		"$@"
+
+	>&2 --printcmd "$@"
+	exec "$@"
+}
+
+GitClone "$@"

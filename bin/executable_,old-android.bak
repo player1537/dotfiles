@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -x
+die() { printf $'Error: %s\n' "$*"; exit 1; }
+
+if ! x=$(adb devices); then
+    die "Failed to call 'adb devices'"
+fi
+
+unset found
+case "${x:?}" in
+(*vega*) found=1;;
+(*) found=;;
+esac
+
+if ! x=$(nmap vega.cloudforest-bee.ts.net -p 37000-44000 | awk "/\/tcp open/" | cut -d/ -f1); then
+    die "Failed to nmap"
+fi
+
+if ! adb connect "vega.cloudforest-bee.ts.net:${x:?}"; then
+    die "Failed to connect the first time"
+fi
+
+if ! adb tcpip 5555; then
+    die "Failed to change tcpip to 5555"
+fi
+
+if ! adb disconnect; then
+    die "Failed to disconnect"
+fi
+
+if ! adb connect vega.cloudforest-bee.ts.net:5555; then
+    die "Failed to connect on 5555"
+fi
+
+exit 0

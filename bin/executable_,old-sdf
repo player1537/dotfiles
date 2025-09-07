@@ -1,0 +1,16 @@
+#!/usr/bin/env -S just --justfile
+
+xterm:
+    xterm \
+        -class "SDF" \
+        -maximized \
+        -fa "Go Mono:size=10:antialias=true" \
+        -fn "7x13" \
+        -e \
+    '{{ just_executable() }}' \
+        --justfile '{{ justfile() }}' \
+        ssh
+
+ssh:
+    ssh \
+        SDF

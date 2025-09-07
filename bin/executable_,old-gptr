@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+exec uv tool run \
+    --python=3.12 \
+    --with=gpt-researcher==0.11 \
+    uvicorn \
+    backend.server.server:app \
+##

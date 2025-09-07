@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+text=$(</dev/stdin)
+text=${text//$'\n\n'/xxxxxxx}
+text=${text//$'\n'/$' '}
+text=${text//xxxxxxx/$'\n\n'}
+printf $'%s' "${text}"

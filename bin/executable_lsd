@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ -t 1 ]; then
+	if [ -n "${LOOPED:-}" ]; then
+		printf $'oh no\n'
+		exit 1
+	fi
+	LOOPED=1 exec lsd "$@" | mc
+else
+
+	if [ $# = 0 ]; then
+		set -- ''
+	fi
+
+	for arg; do
+		for x in ${arg:+$arg/}*; do
+			if ! [ -d "$x" ]; then continue; fi
+			printf $'%s\n' "$x"
+		done
+	done
+fi

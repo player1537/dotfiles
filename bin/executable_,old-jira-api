@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+jira-api() {
+    local key jsonfile re
+
+    IFS= read -r -d '' key
+
+    # remove leading whitespace characters
+    key="${key#"${key%%[![:space:]]*}"}"
+
+    # remove trailing whitespace characters
+    key="${key%"${key##*[![:space:]]}"}"
+
+    printf -v date -- $'%(%F)T' -1
+    
+    jsonfile=${XDG_CACHE_HOME-${HOME:?}/.cache/${date:?}-${key:?}.json
+
+    if ! [ -e "${jsonfile:?}" ]; then
+        curl \
+            --config "${HOME:?}/.jira.curl.txt" \
+            -X GET \
+            -H 'Content-Type: application/json' \
+            --output "${jsonfile:?}" \
+            "https://jira.devtools.intel.com/rest/api/latest/issue/${key:?}"
+    fi
+
+    <"${jsonfile:?}" \
+    jq -r '
+        . as {
+            $key,
+            fields: {
+                issuelinks: $issues,
+                summary: $summary,
+                description: $description
+            }
+        } |
+        [
+            $key + ":",
+            "  summary: >",
+            "    " + ($summary | split("\n") | join("\n    ")),
+            "  description: >",
+            "    " + ($description | split("\n") | join("\n    ")),
+            ($issues | map(. as {type:{outward:$type}, outwardIssue:{key:$key}} ?// {type:{inward:$type}, inwardIssue:{key:$key}} | if $key==null then error("") else {$type, $key} end) | group_by(.type) | map({ type: .[0].type, keys: . | map(.key) }) | map(. as { $type, $keys } | "  " + $type + ":\n    " + ($keys | join("\n    "))) | join("\n"))
+        ] | join("\n")
+    '
+}
+
+return &>/dev/null || jira-api "$@"

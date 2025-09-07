@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+SELF=$0
+
+usage() {
+    >&2 printf $'Usage: %q [--primary | --clipboard] COMMAND TO RUN\n' "${SELF:?}"
+    >&2 printf $'  e.g. %q tr a-z A-Z\n' "${SELF:?}"
+    exit 1
+}
+
+cli() {
+    if [ $# -eq 0 ]; then
+        usage
+    fi
+
+    opt_which=--clipboard
+    if [ "$1" = "--clipboard" ]; then
+        opt_which=--clipboard
+        shift
+    elif [ "$1" = "--primary" ]; then
+        opt_which=--primary
+        shift
+    fi
+
+    if [ $# -eq 0 ]; then
+        usage
+    fi
+
+    opt_filter=( "$@" )
+}
+
+main() {
+    local opt_which opt_filter
+    cli "$@"
+
+    local old new
+    if ! old=$(xsel -o "${opt_which:?}"); then
+        >&2 printf $'Failed to get clipboard: %s\n' "${opt_which:?}"
+        exit 1
+    fi
+
+    if ! new=$(printf $'%s' "${old:?}" | "${opt_filter[@]:?}"); then
+        >&2 printf $'Failed to run filter:'
+        >&2 printf $' %q' "${opt_filter[@]:?}"
+        >&2 printf $'\n'
+        exit 1
+    fi
+
+    if ! printf $'%s' "${new:?}" | xsel -i "${opt_which:?}"; then
+        >&2 printf $'Failed to update clipboard: %s\n' "${opt_which:?}"
+        exit 1
+    fi
+}
+
+main "$@"

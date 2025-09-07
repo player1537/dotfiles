@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+class __Auto:
+    @property
+    def importlib(auto):
+        import importlib
+        return importlib
+
+    def __getattr__(auto, name: str):
+        return auto.importlib.import_module(name)
+
+auto = __Auto()
+
+
+def main():
+    tk = auto.tkinter.Tk()
+    tk.title("Hello World")
+    tk.geometry("300x200")
+    
+    def on_button():
+        uuid = str(auto.uuid.uuid4())
+
+        # to clipboard
+        tk.clipboard_clear()
+        tk.clipboard_append(uuid)
+        tk.update()
+
+    button = auto.tkinter.Button(tk,
+        text='Generate UUID',
+        command=on_button,
+    )
+    button.pack()
+    
+    tk.mainloop()
+
+
+def cli():
+    parser = auto.argparse.ArgumentParser()
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

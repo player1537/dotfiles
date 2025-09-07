@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+wid=$(xdotool search --class scrcpy)
+
+xdotool windowmove --sync "${wid:?}" 992 19
+xdotool windowsize --sync "${wid:?}" 372 747
+

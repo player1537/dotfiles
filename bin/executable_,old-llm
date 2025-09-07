@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+exec uv tool run \
+    --from=llm \
+    --with=llm-fragments-github \
+    --with=llm-openrouter \
+llm \
+    "${@:?${0:?}: need arguments}" \
+##

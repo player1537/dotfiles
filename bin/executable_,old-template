@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+opt_this=${1:?}
+opt_thats=( "${@:2}" )
+
+opt_template=$(</dev/stdin)
+for that in "${opt_thats[@]}"; do
+    : "${opt_template:?}"
+    : "${_//${opt_this,,}/${that,,}}"
+    : "${_//${opt_this^^}/${that^^}}"
+    printf $'%s\n' "${_}"
+done
+

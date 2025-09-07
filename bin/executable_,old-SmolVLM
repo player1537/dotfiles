@@ -1,0 +1,120 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = [
+#     "mlx-vlm==0.1.3",
+#     "torch==2.5.1",
+#     "fastapi==0.115.5",
+#     "mediocreatbest==0.3.3",
+# ]
+# ///
+
+from __future__ import annotations
+from mediocreatbest import auto
+
+auto.register('fastapi', import_names=[
+    'fastapi',
+    'fastapi.middleware.cors',
+])
+
+
+app = auto.fastapi.FastAPI()
+app.add_middleware(auto.fastapi.middleware.cors.CORSMiddleware, allow_origins=['*'])
+
+
+class generateRequest(auto.pydantic.BaseModel):
+    image: str
+    prompt: str
+    temperature: float = 0.1
+    max_tokens: int = 2000
+    seed: int
+    extra: list[str] = []
+
+
+class generateResponse(auto.pydantic.BaseModel):
+    output: str
+    stdout: str
+    stderr: str
+
+
+@app.post('/generate/')
+async def generate(
+    request: generateRequest,
+) -> generateResponse:
+    image = auto.base64.b64decode(request.image)
+    assert image[:8] == b'\x89PNG\r\n\x1a\n', 'invalid image format'
+
+    with auto.tempfile.NamedTemporaryFile(
+        dir = auto.pathlib.Path.cwd(),
+        prefix = 'SmolVLM-image-',
+        suffix = '.png',
+    ) as tmp:
+        tmp = auto.pathlib.Path(tmp.name)
+
+        tmp.write_bytes(image)
+
+        args = [
+            auto.sys.executable,
+            '-m', 'mlx_vlm.generate', *[
+                '--model', 'mlx-community/SmolVLM-Instruct-bf16',
+                '--max-tokens', f'{request.max_tokens}',
+                '--temp', f'{request.temperature}',
+                '--prompt', f'{request.prompt}',
+                '--image', f'{tmp}',
+                *request.extra,
+            ],
+        ]
+
+        # asyncio run process
+        process = await auto.asyncio.create_subprocess_exec(
+            *args,
+            stdout=auto.subprocess.PIPE,
+            stderr=auto.subprocess.PIPE,
+        )
+
+        stdout, stderr = await process.communicate()
+        stdout = stdout.decode()
+        stderr = stderr.decode()
+
+        output = '\n'.join(stdout.splitlines()[6:-3])
+        output = output.strip()
+
+        return generateResponse(
+            output=output,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def main(*, host, bind, port):
+    auto.uvicorn.run(
+        app,
+        host = bind,
+        port = port,
+    )
+
+
+def cli():
+    host2addr = {
+        'https://completion.on.nebula.is.mediocreatbest.xyz/SmolVLM/': (
+            '100.69.50.16',   # tailscale ip addr
+            38788,   # ,address https://completion.on.nebula.is.mediocreatbest.xyz/SmolVLM/
+        ),
+    }
+
+    parser = auto.argparse.ArgumentParser()
+    parser.add_argument('--host', default='https://completion.on.nebula.is.mediocreatbest.xyz/SmolVLM/')
+    parser.add_argument('--bind', default=None)
+    parser.add_argument('--port', type=int, default=None)
+    args = vars(parser.parse_args())
+
+    if args['bind'] is None:
+        args['bind'] = host2addr[args['host']][0]
+
+    if args['port'] is None:
+        args['port'] = host2addr[args['host']][1]
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+self=${BASH_SOURCE[0]:?}
+
+go---ssh() {
+    hostname=${1:?}
+    session=${2:-th}
+
+    exec ssh \
+        -t \
+        "${hostname:?}" \
+        tmux \
+            new-session \
+            -A \
+            -s "${session:?}" \
+    ##
+}
+
+go-accona() {
+    exec "${self:?}" \
+        --ssh \
+        accona \
+        "$@" \
+    ##
+}
+
+"go-${@:?}"

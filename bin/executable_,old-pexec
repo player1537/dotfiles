@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+>&2 printf '$'
+>&2 printf ' %q' "$@"
+>&2 printf '\n'
+exec "$@"

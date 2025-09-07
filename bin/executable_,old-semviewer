@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+from mediocreatbest import auto
+
+
+def Fill(parent, child):
+    parent.grid_rowconfigure(0, weight=1)
+    parent.grid_columnconfigure(0, weight=1)
+    child.grid(row=0, column=0, sticky='nsew')
+
+
+class Editor(auto.tk.Frame):
+    def __init__(self, master: auto.tk.Widget, /):
+        super().__init__(master)
+        self.scrolledtext = auto.tk.scrolledtext.ScrolledText(self)
+        Fill(self, self.scrolledtext)
+
+
+class Stack(auto.tk.Frame):
+    def __init__(self, master: auto.tk.Widget, /, *, value=None):
+        super().__init__(master)
+        if value is None:
+            value = []
+
+        self.value = value
+        self.stringvar = auto.tk.StringVar(value=self.value)
+
+        self.l = auto.tk.Frame(self, bg='#abcdef')
+        self.r = auto.tk.Scrollbar(self)
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)
+
+        self.l.grid(row=0, column=0, sticky='nsew')
+        self.r.grid(row=0, column=1, sticky='ns')
+        self.children = []
+
+    def clear(self):
+        for child in self.children:
+            child.destroy()
+        self.children.clear()
+
+    def add(self, child: auto.tk.Widget, /):
+        i = len(self.children)
+
+
+def main():
+    root = auto.tk.Tk()
+    root.geometry('640x480')
+    root.attributes('-zoomed', True)
+
+    menu = auto.tk.Menu(root)
+    root.config(menu=menu)
+
+    menu.add_command(label='Embed')
+    menu.add_command(label='Search')
+    menu.add_command(label='Answer')
+
+    a = auto.tk.Frame(root)
+    b = auto.tk.Frame(root)
+    c = auto.tk.Frame(root)
+    d = auto.tk.Frame(root)
+    p = auto.tk.Frame(root)
+    auto.mediocreatbest.Grid(root, [
+        [a, b, d],
+        [a, c, d],
+    ])
+    root.grid_rowconfigure(2, weight=0)
+    p.grid(row=2, column=0, rowspan=1, columnspan=3, sticky='sew')
+
+    doc = Editor(a)
+    Fill(a, doc)
+
+    inp = Editor(b)
+    Fill(b, inp)
+
+    res = Editor(c)
+    Fill(c, res)
+
+    out = Editor(d)
+    Fill(d, out)
+
+    prg = auto.ttk.Progressbar(p, mode='determinate')
+    Fill(p, prg)
+
+    root.mainloop()
+
+
+def cli():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

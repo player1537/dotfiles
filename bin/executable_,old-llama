@@ -1,0 +1,68 @@
+#!/usr/bin/env nix-shell
+#!nix-shell -i bash -p bash
+
+llama_source_dir=${HOME:?}/opt/src/llama.cpp-b2734
+llama_binary_dir=${llama_source_dir:?}/build
+
+bind=nebula.cloudforest-bee.ts.net
+unset port
+unset model
+unset template
+token=xxx
+
+which=${BASH_SOURCE[0]##*/,}
+
+if [ "${which:?}" = "llama" ]; then
+    model=${HOME:?}/share/models/Meta-Llama-3-8B-Instruct-Q5_K_M.gguf
+    port=45502
+    template=llama3
+
+elif [ "${which:?}" = "samantha" ]; then
+    model=${HOME:?}/share/models/samantha-mistral-instruct-7b.Q5_K_M.gguf
+    port=52202  # https://completion.on.nebula.is.mediocreatbest.xyz/samantha/
+    template=chatml
+
+elif [ "${which:?}" = "tinyllama" ]; then
+    # model=${HOME:?}/share/models/TinyLlama-1.1B-Chat-v0.6.Q4_K_M.gguf
+    # model=${HOME:?}/share/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+    model=${HOME:?}/share/models/tinydolphin-2.8-1.1b.Q5_K_M.gguf
+    port=63696  # https://completion.on.nebula.is.mediocreatbest.xyz/tinyllama/
+    template=chatml
+
+elif [ "${which:?}" = "rocket" ]; then
+    model=${HOME:?}/share/models/rocket-3b.Q4_K_M.gguf
+    port=51115  # https://completion.on.nebula.is.mediocreatbest.xyz/rocket/
+    template=chatml
+
+elif [ "${which:?}" = "nomic" ]; then
+    model=${HOME:?}/share/models/nomic-embed-text-v1.5.Q8_0.gguf
+    port=53319  # https://completion.on.nebula.is.mediocreatbest.xyz/nomic/
+    unset template
+
+else
+    >&2 printf $'Unknown which: [%q]\n' "${which:?}"
+
+fi
+
+args=()
+args+=(
+    bash
+        -c 'cd "${1:?}" && exec "${@:2}"'
+        '<bash -c>'
+    "${llama_source_dir:?}"
+)
+args+=(
+    "${llama_binary_dir:?}/bin/server"
+        --model "${model:?}"
+        --host "${bind:?}"
+        --port "${port:?}"
+        --embeddings
+        --log-format text
+        --n-gpu-layers 9999
+        # --api-key "${token:?}"
+        ${template+--chat-template "${template:?}"}
+        --ctx-size 8192
+)
+
+exec "${args[@]:?}"
+

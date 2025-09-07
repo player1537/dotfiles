@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+self=${BASH_SOURCE[0]:?}
+
+go-ssh() {
+    exec ,pexec ssh \
+        -L$(,address tabby/kavir +%B:%P:%B:%P) \
+        -t \
+        kavir \
+        tmux attach-session \
+            -t tabby \
+    ##
+}
+
+go-tmux() {
+    exec ,pexec tmux \
+        new-session \
+        -A \
+        -s tabby \
+        "${self:?}" \
+            ssh \
+    ##
+}
+
+"go-${@-tmux}"

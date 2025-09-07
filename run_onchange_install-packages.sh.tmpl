@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+die() { 2>&1 printf "ERROR: %s\n" "$*"; }
+
+{{ if eq .chezmoi.os "linux" -}}
+
+printf "Nothing to install..."
+
+{{ else if eq .chezmoi.os "darwin" -}}
+
+brew install \
+    gh \
+    uv \
+##
+
+{{ end -}}
+
+uv tool install \
+    llm \
+##
+
+uv tool install \
+    rust-just \
+##

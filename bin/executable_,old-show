@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+from __future__ import annotations
+from tkinter import *
+from tkinter.scrolledtext import *
+from tkinter.ttk import *
+from pathlib import Path
+
+from PIL import Image
+from PIL.ImageTk import PhotoImage
+
+
+def main(files, icon: Path):
+    tk = Tk()
+    tk.geometry('640x480')
+    tk.attributes('-zoomed', True)
+    tk.title(',show')
+
+    icon = Image.open(icon)
+    icon = PhotoImage(icon)
+    tk.wm_iconphoto(True, icon)
+
+    style = Style(tk)
+    style.configure('stacked.TNotebook', tabposition='nw', tabplacement='nw')
+
+    notebook = Notebook(tk, style='stacked.TNotebook')
+    notebook.pack(fill='both', expand=True)
+
+    for i, file in enumerate(files, start=1):
+        text = ScrolledText(notebook)
+        text.insert(END, file.read())
+        text.pack(fill='both', expand=True)
+        def callback(event):
+            text = event.widget
+            text.tag_add(SEL, '1.0', END)
+            text.mark_set(INSERT, '1.0')
+            text.see(INSERT)
+            return 'break'
+        text.bind('<Control-KeyRelease-a>', callback)
+        notebook.add(text, text=f'{i} {file.name!s}', underline=0)
+
+    notebook.enable_traversal()
+
+    tk.mainloop()
+
+
+def cli():
+    def icon(s) -> Path:
+        if isinstance(s, str):
+            s = Path.home() / '.local' / 'share' / 'icons' / f'{s}.ico'
+        else:
+            s = Path(s)
+
+        return s
+        
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('files', nargs='*', type=argparse.FileType('r'), default=[open('/dev/null', 'r')])
+    parser.add_argument('--icon', type=icon, default=icon('S'))
+    args = vars(parser.parse_args())
+
+    main(**args)
+
+
+if __name__ == '__main__':
+    cli()

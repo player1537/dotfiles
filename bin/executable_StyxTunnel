@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+usage() {
+	printf $'Usage: %q [-b BIND] [-p PORT] HOSTNAME\n' "${BASH_SOURCE[0]:?}" >&2
+}
+
+cli() {
+	local opt OPTIND OPTARG OPTERR
+	while getopts 'b:p:' opt; do
+		case "${opt:?}" in
+		(b) opt_bind=${OPTARG:?};;
+		(p) opt_port=${OPTARG:?};;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	if [ $# -eq 1 ]; then
+		opt_host=${1:?}
+	else
+		usage
+		return 1
+	fi
+}
+
+StyxTunnel() {
+	local opt_bind opt_port opt_host
+	opt_bind=127.1.2.3
+	opt_port=6666
+
+	if ! cli "$@"; then
+		return
+	fi
+
+	local escaped
+	printf -v escaped $' %q' \
+		opt/inferno/Linux/386/bin/emu /dis/sh.dis -c "
+			listen -A 'tcp!${opt_bind:?}!${opt_port:?}' { export '#U*/' }
+		"
+
+	exec ssh \
+		-L"${opt_bind:?}:${opt_port:?}:${opt_bind:?}:${opt_port:?}" \
+		-oServerAliveInterval=60 \
+		"${opt_host:?}" \
+		"${escaped:?}"
+}
+
+StyxTunnel "$@"
+

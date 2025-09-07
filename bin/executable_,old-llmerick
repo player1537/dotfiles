@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+exec python3 "${HOME:?}/src/VisualChatGPT/VisualLLMerick.py" \
+    --lib "${HOME:?}/src/VisualChatGPT/stdlib.llmerick" \
+    --code "${HOME:?}/src/VisualChatGPT/templates/revise-paragraph.llmerick" \
+    "$@" \
+    ##

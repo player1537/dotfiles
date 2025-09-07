@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+
+"""
+
+import regex
+from transformers import (
+    AutoModelForCausalLM as Model,
+    AutoTokenizer as Tokenizer,
+)
+import rellm
+
+
+DEFAULT_MODEL_NAME = 'distilgpt2'
+DEFAULT_PROMPT = "Split this text into multiple lines:\n\n{}\n\nThe previous text split into multiple lines is:\n\n"
+DEFAULT_PATTERN = r"(?:(?:\S+ ){,10}(?:\n))+"
+DEFAULT_TOKENS = 256
+
+
+def main(model, tokenizer, prompt, pattern, max_new_tokens, stop_after_match, debug):
+    return rellm.complete_re(
+        prompt=prompt,
+        pattern=pattern,
+        tokenizer=tokenizer,
+        model=model,
+        max_new_tokens=max_new_tokens,
+        stop_after_match=stop_after_match,
+        debug=debug,
+    )
+
+
+def cli():
+    import argparse, sys
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', '-i', type=argparse.FileType('rt'), default=sys.stdin)
+    parser.add_argument('--output', '-o', type=argparse.FileType('rt'), default=sys.stdout)
+    parser.add_argument('--model-name', dest='model_name', default=DEFAULT_MODEL_NAME)
+    parser.add_argument('--prompt', default=DEFAULT_PROMPT)
+    parser.add_argument('--pattern', default=DEFAULT_PATTERN)
+    parser.add_argument('--tokens', dest='max_new_tokens', type=int, default=DEFAULT_TOKENS)
+    parser.add_argument('--stop-after-match', action='store_true')
+    parser.add_argument('--debug', action='store_true')
+    args = vars(parser.parse_args())
+
+    model_name = args.pop('model_name')
+    args['model'] = Model.from_pretrained(model_name)
+    args['tokenizer'] = Tokenizer.from_pretrained(model_name)
+
+    input = args.pop('input')
+    input_text = input.read()
+    input.close()
+    args['prompt'] = args.pop('prompt').format(input_text)
+
+    args['pattern'] = regex.compile(args.pop('pattern'))
+
+    output = args.pop('output')
+    output_text = main(**args)
+    print(output_text, file=output)
+
+
+if __name__ == '__main__':
+    cli()

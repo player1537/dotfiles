@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# vim :set ts=4 sw=4 sts=4 et:
+self=${BASH_SOURCE[0]:?}
+pexec() { >&2 printf exec; >&2 printf ' %q' "$@"; >&2 printf '\n'; exec "$@"; }
+#---
+
+# exec > >(tee -a \
+#     "${HOME:?}/tmp/,ssh.txt" \
+# )
+
+go---install() {
+    exec > >(tee \
+        "${XDG_DATA_HOME-${HOME:?}/.local/share}/applications/,ssh.desktop" \
+    )
+        
+    cat \
+    <<EOF
+[Desktop Entry]
+Type=Application
+Name=SSH Scheme Handler
+Exec="${self:?}" --xterm %u
+StartupNotify=false
+StartupWMClass=SSH
+MimeType=x-scheme-handler/ssh;
+EOF
+}
+
+go---ssh() {
+    if [ $# -eq 0 ]; then
+        cat "${HOME:?}/.ssh/config.d"/*.conf \
+        | \
+        sed -ne '/^Host / { s/Host[[:space:]]*/; s/[[:space:]]\{1,\}/\n/gp; }' \
+        | \
+        paste - - - - - - - - \
+        ##
+    fi
+
+    exec ssh \
+        "${@?}" \
+    ##
+}
+
+go---xterm() {
+    pexec -a SSH xterm \
+        -maximized \
+        -u8 \
+        -n "SSH" \
+        -xrm "*iconHint: ${HOME:?}/.local/share/icons/S" \
+        -name "SSH" \
+        -title "SSH" \
+        -class "SSH" \
+        -fa "Go Mono:size=10:antialias=true" \
+        -fn "7x13" \
+        -e "${self:?}" --ssh "${@}" \
+    ##
+}
+
+if declare -F "go-${1-"--xterm"}" &>/dev/null; then
+    "go-${@-"--xterm"}"
+else
+    "go---xterm" "${@}"
+fi

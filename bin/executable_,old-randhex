@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+n=64
+
+if [ $# -eq 1 ] && [ "$1" = "-" ]; then
+    IFS= read -r -d $'\n' n
+
+elif [ $# -eq 1 ]; then
+    n=$1
+
+fi
+
+count=$(( n / 2 + 1 ))
+
+dd if=/dev/random bs=1 count="${count:?}" 2>/dev/null | od -An -t x1 2>/dev/null | tr -d $' \n' | head -c "${n:?}"

@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+SELF=$0
+
+usage() {
+    printf $'Usage: %s PATH/TO/FILE\n' "$SELF" >&2
+    printf $'       %s FILE\n' "$SELF" >&2
+    printf $'       %s FIND_OPTIONS...' "$SELF" >&2
+    exit 1
+}
+
+cli() {
+    opt_findflags=()
+    opt_editorflags=()
+
+    local opt_grep opt_igrep
+
+    while [ $# -gt 0 ]; do
+        case "${1:?}" in
+        (--igrep) shift; opt_igrep=${1:?};;
+        (--grep) shift; opt_grep=${1:?};;
+        (+*) opt_editorflags+=( "${1:?}" ); shift;;
+        (--) shift; break;;
+        (*) opt_findflags+=( "${1:?}" ); shift;;
+        esac
+    done
+
+    if [ -n "${opt_grep+isset}" ]; then
+        opt_findflags+=( -type f -exec grep -q -- "${opt_grep:?}" {} \; )
+    elif [ -n "${opt_igrep+isset}" ]; then
+        opt_findflags+=( -type f -exec grep -I -q -- "${opt_igrep:?}" {} \; )
+    fi
+
+    while [ $# -gt 0 ]; do
+        opt_editorflags+=( "${1:?}" ); shift
+    done
+
+    if [ ${#opt_findflags[@]} -eq 0 ]; then
+        printf $'Error: findflags is empty\n' >&2
+        usage
+    fi
+}
+
+main() {
+    local opt_findflags opt_editorflags
+
+    cli "$@"
+
+    if [ ${#opt_findflags[@]} -eq 1 ] && [ -f "${opt_findflags[0]}" ]; then
+        exec "${EDITOR:-vi}" "${opt_findflags[0]}" "${opt_editorflags[@]}"
+    fi
+
+    exec find \
+        . \
+        "${opt_findflags[@]}" \
+        -print \
+        -exec "${EDITOR:-vi}" {} "${opt_editorflags[@]}" \; \
+        -quit
+}
+
+main "$@"

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+export -n LD_PRELOAD
+
+usage() {
+	printf $'Usage: %q [-m HOST:PORT/PATH]...\n' "${BASH_SOURCE[0]:?}" >&2
+}
+
+cli() {
+	local opt OPTIND OPTARG OPTERR
+	while getopts "m:A:" opt; do
+		case "${opt:?}" in
+		(m) opt_mounts+=( ${OPTARG:?} );;
+		(A) opt_acme=${OPTARG:?};;
+		esac
+	done
+}
+
+Inferno() {
+	local opt_mounts opt_acme
+	opt_mounts=()
+
+	cli "$@"
+
+	local mountcmd mount
+	for mount in "${opt_mounts[@]}"; do
+		local host port path
+		host=${mount%%:*}
+		mount=${mount#*:}
+
+		port=${mount%%/*}
+		mount=${mount#*/}
+
+		path=/${mount:?}
+
+		printf -v mountcmd "; %s %s" "${mountcmd}" "mount -c -A 'tcp!${host:?}!${port:?}' ${path:?}"
+	done
+	mountcmd=${mountcmd#; }
+
+	exec emu \
+		/dis/sh.dis -c "
+			bind '#U*/home' /usr;
+			mount {mntgen} /n
+			${mountcmd:-}
+			wm/wm wm/logon -u $USER
+			${opt_acme+acme "${opt_acme:?}"}
+		"
+}
+
+Inferno "$@"
+

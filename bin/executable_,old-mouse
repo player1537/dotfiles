@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+xinput set-prop \
+    'SynPS/2 Synaptics TouchPad' \
+    'Synaptics Scrolling Distance' \
+    -800 100 \
+##
+
+# Thanks https://askubuntu.com/q/1121773
+xinput set-prop \
+    'TPPS/2 IBM TrackPoint' \
+    'Coordinate Transformation Matrix' \
+    0 0 0 0 0 0 0 0 1 \
+##
+
+

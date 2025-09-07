@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+GitMirror() {
+    local repo
+    repo=${1:?need repo}
+
+    case "${repo:?}" in
+    (git@bitbucket.org:*/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/bitbucket.org/${repo#*:}"
+        ;;
+
+    (git@github.com:*/*.git)
+        exec git clone \
+            --mirror \
+            "https://github.com/${repo#*:}" \
+            "${HOME:?}/var/git/github.com/${repo#*:}"
+        ;;
+
+    (https://github.com/*/*.git)
+        exec git clone \
+            --mirror \
+            "${repo:?}" \
+            "${HOME:?}/var/git/${repo#https://}"
+        ;;
+
+    (*)
+        printf $'Unknown repo: %q\n' "${repo:?}" >&2
+        return 1
+        ;;
+    esac
+}
+
+GitMirror "$@"

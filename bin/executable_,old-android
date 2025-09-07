@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+player=/Applications/Genymotion.app/Contents/MacOS/player.app/Contents/MacOS/player
+vm_name='Google Pixel C'
+
+session_name=android
+
+exec tmux new-session \
+    -d \
+    -s "${session_name:?}" \
+        "${player:?}" \
+        --vm-name "${vm_name:?}" \
+        --no-popup \
+##

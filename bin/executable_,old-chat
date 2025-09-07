@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+root=${HOME:?}/src/VisualChatGPT
+
+IFS=':'
+what="${#}:${*}"
+unset IFS
+
+case "$what" in
+(2:summarize:1)
+    set -- \
+        --name "Summarize: Phase 1" \
+        --code "${root:?}/templates/summarize-1.jsonnet" \
+        ##
+    ;;
+
+(2:summarize:2)
+    set -- \
+        --name "Summarize: Phase 2" \
+        --code "${root:?}/templates/summarize-2.jsonnet" \
+        ##
+    ;;
+
+(2:research:1)
+    set -- \
+        --name "Research: Phase 1 \"Search\"" \
+        --code "${root:?}/templates/research/search.jsonnet" \
+        ##
+    ;;
+
+(2:research:2)
+    set -- \
+        --name "Research: Phase 2 \"Summarize\"" \
+        --code "${root:?}/templates/research/summarize.jsonnet" \
+        ##
+    ;;
+
+(2:research:3)
+    set -- \
+        --name "Research: Phase 3 \"Synthesize\"" \
+        --code "${root:?}/templates/research/synthesize.jsonnet" \
+        ##
+    ;;
+
+(1:flow)
+    set -- \
+        --name "Check Flow" \
+        --code "${root:?}/templates/check-flow.jsonnet" \
+        ##
+    ;;
+esac
+
+exec "${root:?}/VisualChatGPT.py" "$@"

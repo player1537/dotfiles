@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+SELF=${0:?}
+
+usage() {
+    printf $'Usage: %s [-o] -n [NAME | NAME '-' VERSION] [-v VERSION] DIRS...\n' "${SELF:?}" >&2
+    exit 1
+}
+
+cli() {
+    local opt OPTIND OPTARG OPTERR
+    while getopts "n:v:o" opt; do
+        case "${opt:?}" in
+        (n) opt_name=${OPTARG:?};;
+        (v) opt_version=${OPTARG:?};;
+        (o) opt_output=1;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [ -z "${opt_name+isset}" ]; then
+        opt_name=${1:?need name}
+        shift
+    fi
+
+    if [ -z "${opt_version+isset}" ]; then
+        case "${opt_name:?}" in
+        (.)
+            opt_name=${PWD##*/}
+            opt_version=${opt_name##*-}
+            opt_name=${opt_name%-*}
+            ;;
+        (*-*)
+            opt_version=${opt_name##*-}
+            opt_name=${opt_name%-*}
+            ;;
+        esac
+    fi
+
+    opt_dirs+=( "$@" )
+}
+
+main() {
+    local opt_name opt_version opt_dirs opt_output
+    cli "$@"
+
+    if [ -z "${opt_name+isset}" ]; then
+        printf $'Error: Name not set\n' >&2
+        usage
+    fi
+
+    if [ -z "${opt_version+isset}" ]; then
+        printf $'Error: Version not set\n' >&2
+        usage
+    fi
+
+    if [ -n "${opt_output+isset}" ]; then
+        exec >"${HOME:?}/etc/modulefiles/${opt_name:?}-${opt_version:?}"
+    fi
+
+    printf $'%s\n' "#%Module 1.0"
+
+    local opt_dir
+    for opt_dir in "${opt_dirs[@]}"; do
+        opt_dir=$(readlink -f "${opt_dir:?}")
+        case "${opt_dir:?}" in
+        (*/bin)
+            printf $'prepend-path PATH %q\n' "${opt_dir:?}"
+            ;;
+        (*/include)
+            printf $'prepend-path CPATH %q\n' "${opt_dir:?}"
+            ;;
+        (*/lib|*/lib64)
+            printf $'prepend-path LD_LIBRARY_PATH %q\n' "${opt_dir:?}"
+            ;;
+        (*)
+            printf $'Error: Unknown path: %q\n' "${opt_dir:?}"
+            usage
+            ;;
+        esac
+    done
+}
+
+main "$@"

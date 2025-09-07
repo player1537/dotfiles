@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+p() { >&2 printf '%q' "${1:?}"; >&2 printf ' %q' "${@:2}"; >&2 printf '\n'; "$@"; }
+
+xdotool() {
+    p exec xdotool "$@"
+}
+
+scrcpy=$(xdotool search --class scrcpy)
+focus=$(xdotool getwindowfocus)
+
+if [ "${scrcpy:?}" = "${focus:?}" ]; then
+    xdotool windowminimize "${scrcpy:?}"
+
+else
+    xdotool windowactivate "${scrcpy:?}"
+
+fi

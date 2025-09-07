@@ -1,0 +1,119 @@
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+# ]
+# [tool.uv]
+# exclude-newer = "2025-01-19-T00:00:00Z"
+# ///
+
+import sys
+import subprocess
+import time
+import shlex
+from typing import List, Tuple
+import argparse
+
+def parse_commands(args: List[str]) -> Tuple[str, List[str]]:
+    """
+    Parse command line arguments into base command and variants.
+    
+    Args:
+        args: List of command line arguments
+        
+    Returns:
+        Tuple of (base_command, list_of_variants)
+    """
+    if len(args) < 3:
+        show_usage()
+        sys.exit(1)
+        
+    try:
+        # Find the first ':::' separator
+        separator_index = args.index(':::')
+        # Everything before first ::: is the base command
+        base_cmd = ' '.join(args[0:separator_index])
+        
+        # Split remaining args by ::: to get variants
+        variants = []
+        current_variant = []
+        
+        for arg in args[separator_index+1:]:
+            if arg == ':::':
+                if current_variant:
+                    variants.append(' '.join(current_variant))
+                    current_variant = []
+            else:
+                current_variant.append(arg)
+                
+        # Add the last variant if it exists
+        if current_variant:
+            variants.append(' '.join(current_variant))
+            
+        if not variants:
+            show_usage()
+            sys.exit(1)
+            
+        return base_cmd.strip(), variants
+        
+    except ValueError:
+        show_usage()
+        sys.exit(1)
+
+def show_usage():
+    """Display usage instructions."""
+    print("Usage: doit.py <base command> ::: <variant 1> ::: <variant 2> ... ::: <variant N>")
+    print("Example: doit.py 'echo test' ::: 'arg1' ::: 'arg2' ::: 'arg3'")
+
+def create_tmux_session(session_name: str):
+    """Create a new tmux session."""
+    subprocess.run(['tmux', 'new-session', '-d', '-s', session_name], check=True)
+
+def run_commands(base_cmd: str, variants: List[str]):
+    """
+    Create tmux session and run commands in parallel panes.
+    
+    Args:
+        base_cmd: The base command to run
+        variants: List of command variants to append to base command
+    """
+    # Create unique session name
+    session_name = f"parallel_{int(time.time())}"
+    
+    try:
+        # Start new tmux session
+        create_tmux_session(session_name)
+        
+        # For each variant, create a pane and run the command
+        for i, variant in enumerate(variants):
+            if i > 0:
+                # Split window horizontally for all but first command
+                subprocess.run(['tmux', 'split-window', '-h', '-t', session_name], check=True)
+                # Redistribute space evenly
+                subprocess.run(['tmux', 'select-layout', '-t', session_name, 'tiled'], check=True)
+            
+            # Construct and run the full command
+            full_cmd = f"{base_cmd} {variant}"
+            subprocess.run(['tmux', 'send-keys', '-t', session_name, full_cmd, 'C-m'], check=True)
+        
+        # Attach to the session
+        subprocess.run(['tmux', 'attach-session', '-t', session_name], check=True)
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Error running tmux commands: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    """Main entry point."""
+    if len(sys.argv) < 2:
+        show_usage()
+        sys.exit(1)
+    
+    # Parse command line arguments
+    base_cmd, variants = parse_commands(sys.argv[1:])
+    
+    # Run commands in tmux
+    run_commands(base_cmd, variants)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+exec vim \
+    - \
+    -nes \
+    --not-a-term \
+    -c ":set ai textwidth=76" \
+    -c ":exe 'norm ggVGgq'" \
+    -c ':%p' \
+    -c ':qa!' \
+##

@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+self=${BASH_SOURCE[0]:?}
+set -euo pipefail
+
+unset alt
+
+go--1() {
+    unset alt
+    "go-$@"
+}
+
+go--2() {
+    alt=2
+    "go-$@"
+}
+
+go--3() {
+    alt=3
+    "go-$@"
+}
+
+go---ssh() {
+    local hostname
+    hostname=${1:?need hostname}
+
+    local jupyter
+    jupyter=(
+        JUPYTER_TOKEN=xxx
+        python3 -m jupyter lab
+            --NotebookApp.allow_origin='https://colab.research.google.com'
+            --ip=$(,address "jupyter@${hostname:?}${alt+#${alt:?}}" +%B)
+            --port=$(,address "jupyter@${hostname:?}${alt+#${alt:?}}" +%P)
+            --port_retries=0
+    )
+
+    local IFS
+    IFS=' '
+    jupyter=${jupyter[*]}
+    unset IFS
+
+    ,ssh \
+        -L$(,address "jupyter@${hostname:?}${alt+#${alt:?}}" +%B:%P:%B:%P) \
+        -L$(,address "jupyter@${hostname:?}${alt+#${alt:?}}" +127.0.0.1:%P:%B:%P) \
+        -t \
+        "${hostname:?}" \
+        -- \
+    tmux \
+        new-session \
+            -A \
+            -s jupyter \
+            -n "jupyter@$(,address "jupyter@${hostname:?}${alt+#${alt:?}}" +%B:%P)" \
+        \; \
+        send-keys \
+            -t jupyter.0 \
+            "${jupyter:?}" \
+    ##
+}
+
+go---local() {
+    bind=$(,address "jupyter@${HOSTNAME:?}" +127.0.0.1:%P)
+    >&2 printf $'Listening on %s\n' \
+        "${bind:?}" \
+    ##
+
+    exec docker run \
+        --interactive \
+        --tty \
+        --name=colab \
+        --mount="type=bind,src=/home,dst=/home,readonly=true" \
+        --publish="${bind:?}:8080" \
+        --env="JUPYTER_TOKEN=xxx" \
+        us-docker.pkg.dev/colab-images/public/runtime \
+        "$@" \
+    ##
+}
+
+go-accona() {
+    set -- --ssh accona
+    "go-$@"
+}
+
+go-sinai() {
+    set -- --ssh sinai
+    "go-$@"
+}
+
+go-kavir() {
+    set -- --ssh kavir
+    "go-$@"
+}
+
+go-gobi() {
+    set -- --ssh gobi
+    "go-$@"
+}
+
+go-thar() {
+    set -- --ssh thar
+    "go-$@"
+}
+
+go-sahara() {
+    set -- --ssh sahara
+    "go-$@"
+}
+
+go-graphcore() {
+    set -- --ssh graphcore
+    "go-$@"
+}
+
+go-inteldevcloud() {
+    set -- --ssh inteldevcloud
+    "go-$@"
+}
+
+vainl_bind=127.118.146.117
+vainl_port=36905
+
+go-vainl() {
+    exec ssh \
+        -L"${vainl_bind:?}:${vainl_port:?}:${vainl_bind:?}:${vainl_port:?}" \
+        -L"127.0.0.1:${vainl_port:?}:${vainl_bind:?}:${vainl_port:?}" \
+        -tt \
+        accona \
+        '
+            cd ~/src/vainl && \
+            exec ./go.sh Start-Jupyter
+        ' \
+    ##
+}
+
+go-local() {
+    hostname=${HOSTNAME:?}
+
+    uv venv --seed
+
+    JUPYTER_TOKEN=xxx \
+    exec uv run \
+        --with=jupyter \
+        --with=ipywidgets \
+        --with=sqlean.py==3.47.0 \
+        --with=mediocreatbest==0.3.3 \
+    jupyter lab \
+        --NotebookApp.allow_origin='https://colab.research.google.com' \
+        --ip=127.0.0.1 \
+        --port=8888 \
+        --port_retries=0 \
+        --no-browser \
+    ##
+}
+
+"go-$@"
